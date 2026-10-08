@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.DS_Store
+.firewall-terms
+
+# Lean build output. backend-gate/ is committed as SOURCE only, and building it is the first
+# thing `bin/mathesis verify` does — a prebuilt binary in the tree would be an opaque blob
+# nobody can rebuild and compare, which undercuts the one claim this repository makes.
+.lake/
+
+# The frozen exports. They are ~615 MB compressed across 32 records, far past what git should
+# carry, so they live on the bank-exports-v1 release and are fetched by sha256. That is safe
+# precisely because they are content-addressed: the bytes are re-hashed after download and a
+# mismatch fails before the kernel is ever started. Point BANK_EXPORT_STORE at a local directory
+# to verify with no network at all.
+*.export
+*.export.gz
+# backend-gate/init.export is the exception and stays TRACKED: it is the trusted logical core
+# every replay is checked against, it is under 1 MB, and a reference you have to download is a
+# reference you have to trust somebody about.
+!backend-gate/init.export

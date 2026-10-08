@@ -1,0 +1,736 @@
+#!/usr/bin/env python3
+"""mathesis — read the record, and check it.
+
+    mathesis list                    every record
+    mathesis show MTH.R-2026-6001    one record, and the claim it discharges
+    mathesis search shatter          over declaration names, statements and docstrings
+    mathesis verify                  re-derive every record from its frozen export
+    mathesis verify MTH.R-2026-6001  one record
+
+The repository holds the record and this program. Nothing here renders a website, deploys
+anything, or accepts a deposit — the point is that you can read this file, decide whether it
+checks what you care about, and run it.
+
+WHAT `verify` CHECKS, IN ORDER. Each leg can fail on its own, and a failure of any one is a
+failure overall. Nothing is skipped silently: a leg that cannot run is an error, not a pass.
+
+  1. schema        every manifest matches schema/bank-manifest.v2.schema.json
+  2. crosslinks    every argument names a claim that exists, every relation names two that do,
+                   and every topic a claim carries is a topic that exists
+  3. dependencies  a declaration name published by the record means ONE statement: an argument's
+                   root carries its own claim's statement digest, and any node naming another
+                   claim's declaration carries that claim's digest too
+  4. coverage      the number of records re-derived equals the number present
+  5. re-derivation for each argument: fetch <export_sha256>.export.gz, check the decompressed
+                   bytes hash to that sha256, replay the export through the Lean kernel via
+                   `mathesis-adjudicate`, and require ADMITTED, an accepted replay, no
+                   triviality flag, and EXACTLY the axioms the manifest claims
+
+Leg 5 is the one that matters and the one to read the source of: `backend-gate/`. Legs 1–4 catch
+a manifest that lies about its own shape or about what else exists; leg 5 catches a manifest that
+lies about mathematics.
+
+DEPENDENCIES ARE DERIVED, NEVER STORED. Where an argument's graph contains another claim's root
+declaration under that claim's statement digest, the argument depends on it — and `show` says so,
+computed from the graphs. Nothing writes it into a manifest. The hand-maintained list this
+replaced recorded two such edges where the record actually holds six, which is what a second copy
+of the truth is worth.
+
+WHAT IT DOES NOT CHECK. That the prose in `doc` describes the theorem. That the person credited
+proved it. That the statement is interesting, or true of anything outside Lean. `curation.json`,
+`posts.json`, `people.json` and `dictionary.json` are records of who published what, and nothing
+here re-derives them.
+
+AND IT CANNOT CHECK THE RELATIONS. `bank/relations.json` holds assertions — that one result
+generalises another, or shows where it stops. No kernel settles those. What the crosslinks leg
+verifies is only that a relation points at claims that exist and carries a profile that exists;
+whether it is TRUE is somebody's reading of the mathematics, which is why each one is stored with
+a name and a date against it. The distinction between that and a replayed proof is the point of
+this repository, so it is kept visible rather than smoothed over.
+
+THE EVIDENCE IS NOT IN THIS REPOSITORY. The frozen exports are ~615 MB compressed, past what git
+should carry, and live on the `bank-exports-v1` release. They are named by their own sha256 and
+re-hashed after download, so fetching them from anywhere is safe: point BANK_EXPORT_STORE at a
+local directory and this runs with no network at all.
+
+    MATHESIS_ADJUDICATE   the gate binary; default backend-gate/.lake/build/bin/mathesis-adjudicate
+    MATHESIS_INIT_EXPORT  the trusted logical core; default backend-gate/init.export
+    BANK_EXPORT_STORE     gh:owner/repo@tag | https://base/url | /local/dir
+    BANK_EXPORTS_DIR      download cache; default ${TMPDIR}/stet-bank-exports
+"""
+from __future__ import annotations
+
+import gzip
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def repo_root() -> Path:
+    """The nearest ancestor holding the record and the verifier.
+
+    Both, not either: a directory with `bank/` alone might be anyone's, and one with
+    `backend-gate/` alone cannot tell you what it is verifying.
+    """
+    here = Path(__file__).resolve().parent
+    for d in (here, *here.parents):
+        if (d / "bank" / "arguments").is_dir() and (d / "backend-gate").is_dir():
+            return d
+    sys.exit("not inside a mathesis checkout (looked for bank/arguments/ and backend-gate/)")
+
+
+ROOT = repo_root()
+ARGUMENTS = ROOT / "bank" / "arguments"
+CLAIMS = ROOT / "bank" / "claims"
+SCHEMA = ROOT / "schema" / "bank-manifest.v2.schema.json"
+RELATIONS = ROOT / "bank" / "relations.json"
+TOPICS = ROOT / "bank" / "topics.json"
+PROFILES = ROOT / "bank" / "profiles.json"
+DICTIONARY = ROOT / "bank" / "dictionary.json"
+POSTS = ROOT / "bank" / "posts.json"
+PEOPLE = ROOT / "bank" / "people.json"
+
+
+def load(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def arguments() -> list[dict]:
+    return [load(p)["argument"] for p in sorted(ARGUMENTS.glob("*.json"))]
+
+
+def claims() -> list[dict]:
+    return [load(p) for p in sorted(CLAIMS.glob("*.json"))]
+
+
+def argument_files() -> list[dict]:
+    """Whole argument files, graph included.
+
+    `arguments()` above unwraps the `argument` key and drops `nodes`/`edges`/`leaves` with it,
+    which is right for every caller that wants the record. The dependency leg wants the graph.
+    """
+    return [load(p) for p in sorted(ARGUMENTS.glob("*.json"))]
+
+
+def sidecar(path: Path) -> list[dict]:
+    """A top-level list file, or an empty one if it is absent.
+
+    Absent is legitimate — a record with no relations asserted about it is the normal starting
+    state — so this does not fail. A file that exists but is malformed still raises.
+    """
+    return load(path) if path.is_file() else []
+
+
+def derived_dependencies() -> dict[str, list[str]]:
+    """Which claims each argument depends on, computed from the graphs.
+
+    An argument depends on a claim when its own graph contains a node carrying that claim's
+    declaration name under that claim's statement digest. The digest is what makes it a
+    dependency rather than a coincidence: a name alone would also match a different statement
+    that happened to be called the same thing.
+
+    Deliberately not stored anywhere. See the note at the top of this file.
+    """
+    by_decl = {c["decl_name"]: c for c in claims()}
+    out: dict[str, list[str]] = {}
+    for doc in argument_files():
+        arg = doc["argument"]
+        deps = []
+        for n in doc["nodes"]:
+            c = by_decl.get(n["decl_name"])
+            if c is None or c["accession"] == arg["claim_accession"]:
+                continue
+            if n["type_sha256"] == c["statement_digest"]:
+                deps.append(c["accession"])
+        if deps:
+            out[arg["accession"]] = sorted(set(deps))
+    return out
+
+
+def find(accession: str) -> tuple[str, dict] | None:
+    p = ARGUMENTS / f"{accession}.json"
+    if p.is_file():
+        return "argument", load(p)["argument"]
+    p = CLAIMS / f"{accession}.json"
+    if p.is_file():
+        return "claim", load(p)
+    return None
+
+
+# ---------------------------------------------------------------------------------------------
+# Reading
+#
+# These compute the view each time from the files on disk. There is no index in this repository
+# and deliberately so: an index is a second copy of the truth, and the first thing to go stale.
+# ---------------------------------------------------------------------------------------------
+
+
+def cmd_list(argv: list[str]) -> int:
+    want_claims = "--claims" in argv
+    want_args = "--arguments" in argv or not want_claims
+    if want_claims and not want_args:
+        for c in claims():
+            print(f"{c['accession']}  {c['decl_name']}")
+        return 0
+    for a in arguments():
+        ax = ", ".join(a["axioms_reached"]) or "none"
+        print(f"{a['accession']}  {a['root_decl_name']}")
+        print(f"{'':17s}claim {a['claim_accession']}  axioms: {ax}")
+    return 0
+
+
+def topic_name(topic_id: str) -> str:
+    for x in sidecar(TOPICS):
+        if x["id"] == topic_id:
+            return f"{x['name']} ({topic_id})"
+    return topic_id
+
+
+def show_assertions(claim_accession: str) -> None:
+    """Relations touching this claim, labelled as the assertions they are.
+
+    Printed apart from everything above them, and with a name against each, because nothing here
+    was checked by a kernel: somebody read both results and said how they stand. A reader should
+    not have to work out which lines of this output are of that kind.
+    """
+    rels = [r for r in sidecar(RELATIONS)
+            if claim_accession in (r["from"], r["to"])]
+    if not rels:
+        return
+    by_id = {x["id"]: x for x in sidecar(PROFILES)}
+    print("  asserted     not checked by anything — read them as somebody's opinion")
+    for r in sorted(rels, key=lambda r: (r["from"], r["kind"], r["to"])):
+        verb = r["kind"].replace("_", " ")
+        if r["from"] == claim_accession:
+            line = f"this {verb} {r['to']}"
+        else:
+            line = f"{r['from']} {verb} this"
+        who = by_id.get(r["asserted_by"], {}).get("citation_name", r["asserted_by"])
+        print(f"{'':15s}{line}  — {who}, {r['asserted_at'][:10]}")
+        if r.get("note"):
+            print(f"{'':17s}{r['note']}")
+
+
+def cmd_show(argv: list[str]) -> int:
+    if not argv:
+        return usage("show needs an accession, e.g. MTH.R-2026-6001")
+    hit = find(argv[0])
+    if hit is None:
+        print(f"no record {argv[0]}", file=sys.stderr)
+        return 1
+    kind, rec = hit
+    if kind == "claim":
+        print(f"{rec['accession']}  (claim)")
+        print(f"  declaration  {rec['decl_name']}")
+        print(f"  module       {rec['module']}")
+        print(f"  credited     {rec['citation_name']} (@{rec['login']})")
+        if rec.get("topic"):
+            print(f"  topic        {topic_name(rec['topic'])}")
+        print(f"  arguments    {rec['arguments_count']}")
+        print(f"  reference    {rec['reference_sha256']}")
+        built_on_by = sorted(a for a, deps in derived_dependencies().items()
+                             if rec["accession"] in deps)
+        if built_on_by:
+            print(f"  built on by  {', '.join(built_on_by)}")
+            print(f"{'':15s}derived from the argument graphs, not stored")
+        show_assertions(rec["accession"])
+        print(f"\n{rec['pretty']}")
+        if rec.get("doc"):
+            print(f"\n{rec['doc']}")
+        return 0
+    print(f"{rec['accession']}  (argument)")
+    print(f"  declaration  {rec['root_decl_name']}")
+    print(f"  module       {rec['root_module']}")
+    print(f"  discharges   {rec['claim_accession']}")
+    print(f"  credited     {rec['citation_name']} (@{rec['login']})")
+    if rec["cites"]:
+        print(f"  cites        {', '.join(rec['cites'])}")
+    print(f"  axioms       {', '.join(rec['axioms_reached']) or 'none'}")
+    print(f"  evidence     {rec['export_sha256']}")
+    print(f"               {rec['export_bytes']:,} bytes, {rec['export_constants']:,} constants")
+    print(f"  graph        {rec['node_count']} steps, {rec['edge_count']} edges")
+    deps = derived_dependencies().get(rec["accession"], [])
+    if deps:
+        print(f"  builds on    {', '.join(deps)}")
+        print(f"{'':15s}derived from this argument's graph, not stored")
+    show_assertions(rec["claim_accession"])
+    print(f"\n{rec['root_pretty']}")
+    claim = find(rec["claim_accession"])
+    if claim and claim[1].get("doc"):
+        print(f"\n{claim[1]['doc']}")
+    return 0
+
+
+def cmd_search(argv: list[str]) -> int:
+    if not argv:
+        return usage("search needs some text")
+    needle = " ".join(argv).lower()
+    hits = 0
+    for c in claims():
+        hay = " ".join(str(c.get(k, "")) for k in ("decl_name", "pretty", "doc", "module"))
+        if needle in hay.lower():
+            hits += 1
+            print(f"{c['accession']}  {c['decl_name']}")
+    for a in arguments():
+        hay = " ".join(str(a.get(k, "")) for k in ("root_decl_name", "root_pretty", "root_module"))
+        if needle in hay.lower():
+            hits += 1
+            print(f"{a['accession']}  {a['root_decl_name']}")
+    if not hits:
+        print(f"nothing matches {' '.join(argv)!r}", file=sys.stderr)
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------------------------
+# Checking
+# ---------------------------------------------------------------------------------------------
+
+FAILURES: list[str] = []
+
+
+def fail(what: str, detail: str) -> None:
+    FAILURES.append(f"{what}: {detail}")
+    print(f"  FAIL  {what}  {detail}")
+
+
+def leg_schema() -> None:
+    """Every manifest matches the published schema.
+
+    Fails closed when `jsonschema` is missing rather than skipping: a verifier that quietly
+    checks less than it says is the failure mode this whole repository exists to avoid.
+    """
+    try:
+        from jsonschema import Draft202012Validator
+    except ImportError:
+        fail("schema", "python package `jsonschema` is not installed (pip install jsonschema)")
+        return
+    schema = load(SCHEMA)
+    # Validate each file against the branch its directory says it is, rather than against the
+    # top-level `oneOf`. The schema keeps the oneOf so an outside consumer can hand it any
+    # manifest, but here it only produces the wrong branch's complaint: a malformed argument
+    # came back as "'argument', 'edges', 'leaves', 'nodes' were unexpected", which is the CLAIM
+    # branch objecting to an argument file and says nothing about what is actually wrong.
+    branches = {
+        CLAIMS: {"$defs": schema["$defs"], "$ref": "#/$defs/claimFile"},
+        ARGUMENTS: {"$defs": schema["$defs"], "$ref": "#/$defs/argumentFile"},
+    }
+    # The sidecar files are validated the same way, by name rather than by directory. They were
+    # left out of the first version of this leg and a `builds_on` relation — a kind the schema
+    # does not allow, because a dependency is derived rather than asserted — went in without
+    # complaint. A schema nothing is validated against is decoration.
+    files = {
+        RELATIONS: {"$defs": schema["$defs"], "$ref": "#/$defs/relationsFile"},
+        TOPICS: {"$defs": schema["$defs"], "$ref": "#/$defs/topicsFile"},
+        # The other four sidecars, which nothing validated either. They carry what a record
+        # SAYS about itself that is not in the record's own file: who wrote it, what built it,
+        # and where it sits in the reading order. A deposited record adds a profile and an
+        # environment to two of them, written by a machine, which is precisely when a published
+        # schema stops being decoration.
+        DICTIONARY: {"$defs": schema["$defs"], "$ref": "#/$defs/dictionaryFile"},
+        PROFILES: {"$defs": schema["$defs"], "$ref": "#/$defs/profilesFile"},
+        POSTS: {"$defs": schema["$defs"], "$ref": "#/$defs/postsFile"},
+        PEOPLE: {"$defs": schema["$defs"], "$ref": "#/$defs/peopleFile"},
+    }
+    bad = 0
+    checked = 0
+    for directory, sub in branches.items():
+        validator = Draft202012Validator(sub)
+        for path in sorted(directory.glob("*.json")):
+            checked += 1
+            errors = sorted(validator.iter_errors(load(path)), key=lambda e: list(e.path))
+            if errors:
+                bad += 1
+                where = "/".join(str(x) for x in errors[0].path) or "(root)"
+                fail("schema", f"{path.name} at {where}: {errors[0].message[:100]}")
+    for path, sub in files.items():
+        if not path.is_file():
+            continue
+        checked += 1
+        doc = load(path)
+        # Same reason the claim/argument branches are chosen by directory rather than left to
+        # the top-level oneOf: when nothing matches an `anyOf`, jsonschema reports the failure
+        # at the root and prints the whole document instead of naming the field. Measured, on a
+        # dictionary missing its toolchain: "dictionary.json at (root): {'adjudicate_image':
+        # 'mathesis-adjudicate@5a48…" — every key it HAS, and not the one it lacks.
+        #
+        # dictionary.json is the only file here with two shapes, so it is the only one that
+        # needs this. The shape is decided by what the file actually is.
+        if path is DICTIONARY:
+            sub = {"$defs": schema["$defs"], "$ref": "#/$defs/dictionary"}
+            if isinstance(doc, list):
+                sub = {
+                    "$defs": schema["$defs"],
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"$ref": "#/$defs/dictionary"},
+                }
+        errors = sorted(Draft202012Validator(sub).iter_errors(doc), key=lambda e: list(e.path))
+        if errors:
+            bad += 1
+            where = "/".join(str(x) for x in errors[0].path) or "(root)"
+            fail("schema", f"{path.name} at {where}: {errors[0].message[:100]}")
+    if not bad:
+        print(f"  ok    schema        {checked} files")
+
+
+def leg_crosslinks() -> None:
+    """Everything that names something else names something that is there.
+
+    Extended past claim<->argument to cover the two sidecar files, because a relation pointing at
+    an accession that does not exist, or a claim filed under a topic nobody defined, is the same
+    class of mistake and was previously caught by nothing at all.
+    """
+    claim_by = {c["accession"]: c for c in claims()}
+    args = arguments()
+    for a in args:
+        if a["claim_accession"] not in claim_by:
+            fail("crosslinks", f"{a['accession']} discharges {a['claim_accession']}, which does not exist")
+    counted: dict[str, int] = {}
+    for a in args:
+        counted[a["claim_accession"]] = counted.get(a["claim_accession"], 0) + 1
+    for acc, c in claim_by.items():
+        if c["arguments_count"] != counted.get(acc, 0):
+            fail("crosslinks", f"{acc} says arguments_count={c['arguments_count']}, {counted.get(acc, 0)} argument(s) name it")
+
+    topic_ids = {x["id"] for x in sidecar(TOPICS)}
+    for c in claim_by.values():
+        if c.get("topic") and c["topic"] not in topic_ids:
+            fail("crosslinks", f"{c['accession']} is filed under topic {c['topic']!r}, which bank/topics.json does not define")
+
+    profile_ids = {x["id"] for x in sidecar(PROFILES)}
+    seen: set[tuple[str, str, str]] = set()
+    rels = sidecar(RELATIONS)
+    for r in rels:
+        for end in ("from", "to"):
+            if r[end] not in claim_by:
+                fail("crosslinks", f"relation {r['from']} {r['kind']} {r['to']} names {r[end]}, which does not exist")
+        if r["from"] == r["to"]:
+            fail("crosslinks", f"relation {r['from']} {r['kind']} itself")
+        if r["asserted_by"] not in profile_ids:
+            fail("crosslinks", f"relation {r['from']} {r['kind']} {r['to']} is asserted by {r['asserted_by']}, which bank/profiles.json does not define")
+        key = (r["from"], r["kind"], r["to"])
+        if key in seen:
+            fail("crosslinks", f"relation {r['from']} {r['kind']} {r['to']} is asserted twice")
+        seen.add(key)
+
+    if not FAILURES:
+        print(f"  ok    crosslinks    {len(args)} arguments, {len(claim_by)} claims, {len(rels)} relations")
+
+
+def leg_dependencies() -> None:
+    """A declaration name the record publishes means one statement.
+
+    Two checks of the same idea, both keyed on the statement digest rather than the name:
+
+      * an argument's root node carries the statement digest of the claim it discharges, so the
+        graph proves what the claim publishes and not something else filed under it;
+      * a node naming another claim's declaration carries that claim's digest, which is what
+        makes it a dependency rather than a collision.
+
+    The second is what `show` reports as `builds on`. Neither is stored: both are recomputed from
+    the files every run, so there is nothing here that can be edited into agreement.
+    """
+    by_decl = {c["decl_name"]: c for c in claims()}
+    claim_by = {c["accession"]: c for c in claims()}
+    edges = roots = 0
+    for doc in argument_files():
+        arg = doc["argument"]
+        own = claim_by.get(arg["claim_accession"])
+        for n in doc["nodes"]:
+            if n.get("is_root") and own is not None:
+                roots += 1
+                if n["type_sha256"] != own["statement_digest"]:
+                    fail("dependencies", f"{arg['accession']} proves a statement its claim {own['accession']} does not publish")
+                continue
+            c = by_decl.get(n["decl_name"])
+            if c is None or c["accession"] == arg["claim_accession"]:
+                continue
+            if n["type_sha256"] == c["statement_digest"]:
+                edges += 1
+            else:
+                fail("dependencies", f"{arg['accession']} has a step `{n['decl_name']}` whose statement differs from {c['accession']}, which publishes that name")
+    if not FAILURES:
+        print(f"  ok    dependencies  {roots} roots match their claim, {edges} derived")
+
+
+def leg_coverage(rederived: int, present: int) -> None:
+    """The count re-derived equals the count present.
+
+    Without this a run that quietly verified none of them reports no failures and exits 0, which
+    is indistinguishable from a clean pass — the same shape as an absent binary reading as
+    success.
+    """
+    if rederived != present:
+        fail("coverage", f"{rederived} of {present} arguments were re-derived")
+    else:
+        print(f"  ok    coverage      {rederived}/{present} re-derived")
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(8 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def fetch(name: str, cache: Path) -> str | None:
+    """Put `name` in the cache. Returns None on success, or why it could not be got.
+
+    THE REASON MATTERS, AND IT USED TO BE THROWN AWAY.
+
+    This returned a bare bool and ran the downloader with `capture_output=True`, so a timeout, a
+    rate limit, a full disk and a genuinely absent asset were the same answer — and the caller
+    reported all four as "<name> is not in the store". That sentence says the bank is missing the
+    evidence for a record, which reads to any reader as the record being unverifiable.
+
+    Measured on 2026-09-28: a re-derivation reported MTH.R-2026-6022's export "is not in the
+    store" while the asset was in the release, 64 MB of it, and `--audit` said the release and
+    the record agreed. The download had failed; the corpus was fine. That is the same shape as a
+    runner exhausting its disk and surfacing as "reject — submission.lean failed to build".
+
+    So the downloader's own stderr comes back, and the caller prints it."""
+    dest = cache / name
+    if dest.is_file() and dest.stat().st_size:
+        return None
+    store = os.environ.get("BANK_EXPORT_STORE", "gh:noumenal-ai/stet-bank@bank-exports-v1")
+    cache.mkdir(parents=True, exist_ok=True)
+    if store.startswith("gh:"):
+        spec = store[3:]
+        repo, _, tag = spec.partition("@")
+        cmd = ["gh", "release", "download", tag, "-R", repo, "-p", name, "-D", str(cache), "--clobber"]
+    elif store.startswith(("http://", "https://")):
+        cmd = ["curl", "-fsSL", "-o", str(dest), f"{store.rstrip('/')}/{name}"]
+    else:
+        src = Path(store) / name
+        if not src.is_file():
+            return f"{src} does not exist"
+        shutil.copyfile(src, dest)
+        return None
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode == 0 and dest.is_file():
+        return None
+    # The downloader's last line, which distinguishes "no such asset" from every other way a
+    # 645 MB pull over 33 assets can fail.
+    why = (proc.stderr or proc.stdout or "").strip().splitlines()
+    return why[-1][:120] if why else f"{cmd[0]} exited {proc.returncode} and wrote no reason"
+
+
+def build_gate(exe: Path) -> bool:
+    """Build the adjudicator from the source in backend-gate/. Returns whether `exe` now exists.
+
+    Doing this here is the difference between "clone and run the program" and "clone, read an
+    error, go and read a second set of instructions, then run the program". It is a real build —
+    it downloads a Lean toolchain the first time and takes a few minutes — so it announces itself
+    and streams the output rather than hanging silently.
+
+    No prebuilt binary is shipped instead, deliberately: a committed executable is an opaque blob
+    nobody can rebuild and compare, and this repository's whole claim is that you do not have to
+    take its word for anything.
+    """
+    pkg = ROOT / "backend-gate"
+    if shutil.which("lake") is None:
+        return False
+    print(f"  the gate is not built — building it from {pkg.name}/ (this takes a few minutes)\n")
+    rc = subprocess.run(["lake", "build", "mathesis-adjudicate"], cwd=pkg).returncode
+    print()
+    return rc == 0 and exe.is_file() and os.access(exe, os.X_OK)
+
+
+def statement_mismatch(claim: dict | None, target: dict) -> str | None:
+    """Does the claim publish the statement the kernel actually checked? None if it does.
+
+    THE HOLE THIS CLOSES
+
+    A record publishes a rendering of its statement and a reader takes that to be what was
+    proved. For the first 32 records nothing made that true. `statement_digest` was the sha256
+    of `pretty`, produced by pretty-printing in an environment that IMPORTS the author's own
+    module — so their `notation` and `@[app_unexpander]` declarations were live while their own
+    theorem was rendered, and they chose the words. `theorem rh : Disguised := trivial` with
+    `notation "RiemannHypothesis" => Disguised` renders as `RiemannHypothesis`, and the axiom
+    audit, the replay and the triviality flag all pass, because all of them are about the term
+    and none of them is about the words.
+
+    The adjudicator renders each target from the exact `Expr` the kernel replayed, in an empty
+    environment where nobody has registered a delaborator. Notation lives in syntax extensions,
+    which a kernel export does not contain. So that string is a function of the term alone, and
+    THIS is what makes it a check: the gate runs again here, over the published blob, on a
+    stranger's machine. A record whose statement disagrees with its term is detectable by
+    anybody rather than only by us at publication time.
+
+    Gated on `statement_source`, which is absent on the 32 records that predate it. Their graphs
+    and verdicts no longer exist on disk, so they cannot be regenerated to acquire the binding,
+    and failing them here would report an honest corpus as broken. What they get instead is a
+    record that does not claim the guarantee.
+    """
+    if claim is None or claim.get("statement_source") != "kernel":
+        return None
+    got = target.get("statement")
+    if not isinstance(got, str) or not got.strip():
+        # The record says its digest is the kernel's rendering and the gate produced none. Either
+        # the record is wrong or the gate is older than the record; both mean the claim it makes
+        # about itself is unsupported, which is the thing this leg exists to refuse.
+        return f"claims statement_source=kernel, but the gate rendered no statement for {target.get('decl')}"
+    digest = hashlib.sha256(got.encode("utf-8")).hexdigest()
+    if digest != claim["statement_digest"]:
+        return (f"the statement the kernel checked digests to {digest[:16]}…, "
+                f"but {claim['accession']} publishes {claim['statement_digest'][:16]}…")
+    return None
+
+
+def retracted() -> list[dict]:
+    """Records a maintainer has withdrawn from use, in accession order."""
+    return sorted(
+        (c for c in claims() if c.get("retracted_at")),
+        key=lambda c: c["accession"],
+    )
+
+
+def leg_standing() -> None:
+    """Report withdrawn records, and arguments that lean on one.
+
+    NOT A FAILURE, either way. A retracted record still re-derives — the kernel accepted that
+    replay and nothing about the mathematics changed — so failing it would be reporting a
+    verifier disagreement that does not exist. And failing an argument that cites one would let
+    a single retraction cascade into a corpus that will not verify, which is a strong reason not
+    to retract anything and therefore the wrong incentive.
+
+    What a run must not do is stay silent. `verify` ending in "no failures" over a corpus
+    containing withdrawn records reads as "all of this stands", and the one thing a retraction
+    exists to say is that some of it does not.
+    """
+    out = retracted()
+    if not out:
+        return
+    print()
+    print(f"  {len(out)} withdrawn record(s) — still verified, not recommended:")
+    for c in out:
+        print(f"    {c['accession']}  {c['retraction_reason']}")
+
+    # An argument whose graph names a withdrawn claim's declaration under that claim's statement
+    # digest depends on it — the same derivation leg_dependencies makes, applied to standing.
+    by_digest = {c["statement_digest"]: c for c in out}
+    for doc in argument_files():
+        arg = doc["argument"]
+        for n in doc["nodes"]:
+            if n.get("is_root"):
+                continue
+            hit = by_digest.get(n["type_sha256"])
+            if hit is not None:
+                print(f"    {arg['accession']} has a step from {hit['accession']}, which is withdrawn")
+
+
+def leg_rederive(only: str | None) -> int:
+    """Replay each frozen export through the Lean kernel and compare it to its manifest."""
+    exe = Path(os.environ.get(
+        "MATHESIS_ADJUDICATE", ROOT / "backend-gate" / ".lake" / "build" / "bin" / "mathesis-adjudicate"))
+    if not (exe.is_file() and os.access(exe, os.X_OK)) and not build_gate(exe):
+        fail("re-derivation",
+             f"the gate is not built at {exe}, and building it here did not produce it. "
+             "It needs a Lean toolchain: install elan (https://github.com/leanprover/elan), "
+             "then `cd backend-gate && lake build mathesis-adjudicate`")
+        return 0
+    init = Path(os.environ.get("MATHESIS_INIT_EXPORT", ROOT / "backend-gate" / "init.export"))
+    if not init.is_file() or not init.stat().st_size:
+        fail("re-derivation", f"the trusted logical core is missing or empty at {init}")
+        return 0
+    cache = Path(os.environ.get("BANK_EXPORTS_DIR", Path(os.environ.get("TMPDIR", "/tmp")) / "stet-bank-exports"))
+
+    claim_by = {c["accession"]: c for c in claims()}
+
+    done = 0
+    for a in arguments():
+        if only and a["accession"] != only:
+            continue
+        acc, sha, decl = a["accession"], a["export_sha256"], a["root_decl_name"]
+        name = f"{sha}.export.gz"
+        why = fetch(name, cache)
+        if why is not None:
+            fail(acc, f"{name} did not arrive: {why}")
+            continue
+        blob = cache / name
+        raw = cache / f"{sha}.export"
+        with gzip.open(blob, "rb") as src, raw.open("wb") as dst:
+            shutil.copyfileobj(src, dst)
+        got = sha256_file(raw)
+        if got != sha:
+            # Before the kernel ever sees it. A substituted blob is caught by arithmetic, not by
+            # trusting whoever served it.
+            fail(acc, f"evidence hashes to {got[:16]}…, manifest says {sha[:16]}…")
+            raw.unlink(missing_ok=True)
+            continue
+        env = {**os.environ, "MATHESIS_INIT_EXPORT": str(init)}
+        proc = subprocess.run([str(exe), str(raw), "--", decl], capture_output=True, text=True, env=env)
+        raw.unlink(missing_ok=True)
+        try:
+            verdict = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            fail(acc, f"the gate produced no verdict (exit {proc.returncode}): {proc.stderr.strip()[:90]}")
+            continue
+        target = next((t for t in verdict.get("targets", []) if t.get("decl") == decl), None)
+        if verdict.get("verdict") != "ADMITTED":
+            fail(acc, f"verdict {verdict.get('verdict')}")
+        elif not (verdict.get("replay") or {}).get("accepted"):
+            fail(acc, "the kernel did not accept the replay")
+        elif target is None:
+            fail(acc, f"the export does not contain {decl}")
+        elif target.get("triviality") is not None:
+            fail(acc, f"flagged trivial: {target['triviality']}")
+        elif sorted(target.get("axioms_reached") or []) != sorted(a["axioms_reached"]):
+            # Exact equality, not subset. A manifest claiming FEWER axioms than the proof uses is
+            # the interesting lie, and a whitelist check would pass it.
+            fail(acc, f"axioms {sorted(target.get('axioms_reached') or [])} != manifest {sorted(a['axioms_reached'])}")
+        elif (bad := statement_mismatch(claim_by.get(a["claim_accession"]), target)):
+            fail(acc, bad)
+        else:
+            print(f"  ok    {acc}  {decl}")
+        done += 1
+    return done
+
+
+def cmd_verify(argv: list[str]) -> int:
+    only = next((a for a in argv if not a.startswith("-")), None)
+    if only and find(only) is None:
+        print(f"no record {only}", file=sys.stderr)
+        return 1
+    present = len([a for a in arguments() if not only or a["accession"] == only])
+    print(f"verifying {present} argument(s) from {ROOT}\n")
+    leg_schema()
+    leg_crosslinks()
+    leg_dependencies()
+    done = leg_rederive(only)
+    leg_coverage(done, present)
+    leg_standing()
+    print()
+    if FAILURES:
+        print(f"{len(FAILURES)} failure(s):")
+        for f in FAILURES:
+            print(f"  - {f}")
+        return 1
+    print("every record re-derives from its own evidence.")
+    return 0
+
+
+def usage(message: str = "") -> int:
+    if message:
+        print(message, file=sys.stderr)
+    print(__doc__.split("WHAT `verify` CHECKS")[0].rstrip(), file=sys.stderr)
+    return 2
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        return usage()
+    command, rest = argv[0], argv[1:]
+    return {
+        "list": cmd_list, "show": cmd_show, "search": cmd_search, "verify": cmd_verify,
+    }.get(command, lambda _: usage(f"unknown command {command!r}"))(rest)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

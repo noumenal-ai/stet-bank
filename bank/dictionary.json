@@ -1,0 +1,23 @@
+[
+  {
+    "adjudicate_image": "mathesis-adjudicate",
+    "base_names_sha256": "",
+    "blueprint_labels": {},
+    "blueprint_url": "",
+    "builder_image": "",
+    "curation": "deposit",
+    "export_bytes": 0,
+    "export_constants": 0,
+    "export_sha256": "",
+    "flt_rev": "",
+    "id": "45c7a066-9dae-5af4-9ce6-3a2555b95cb3",
+    "label": "deposit@v4.31.0",
+    "mathlib_rev": "",
+    "max_export_bytes": 0,
+    "max_source_bytes": 0,
+    "module_roots": [
+      "Submission"
+    ],
+    "toolchain": "leanprover/lean4:v4.31.0"
+  }
+]
