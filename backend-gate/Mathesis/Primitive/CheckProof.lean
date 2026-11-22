@@ -9,7 +9,7 @@ leanprover/Comparator (Apache-2.0, Lean FRO, LLC; author Henrik Böving): `Compa
 -/
 import Lean
 import Export.Parse
-import Lean4Checker.Replay
+import MathesisReplay
 import Mathesis.Verdict
 
 /-!
@@ -332,7 +332,7 @@ def checkBuiltins (candidate : ExportedEnv) (trusted : Name → Option ConstantI
 /-! ### Leg 1c — kernel replay -/
 
 /-- Replay the candidate's constant map through the built-in Lean kernel (the gating kernel), from
-source, via `Lean4Checker`'s `Environment.replay'`. Adding `Quot` primitives is done by the kernel
+source, via this gate's toolchain replay (`Mathesis.replayKernel` in `MathesisReplay`). Adding `Quot` primitives is done by the kernel
 when it processes them, so they are erased from the replay map (as in `Comparator.Main.runKernel`).
 The erased constants are therefore never checked: each one the candidate carries must then equal
 the kernel's own, or it went into the verdict unchecked (leanprover/comparator#71). -/
@@ -341,7 +341,7 @@ def replayLean (candidate : ExportedEnv) : IO (Bool × String) := do
     let env ← mkEmptyEnvironment
     let quotAux := [``Quot.mk, ``Quot.lift, ``Quot.ind]
     let constMap := quotAux.foldl (init := candidate.constMap) (·.erase ·)
-    let env' ← env.replay' constMap
+    let env' ← Mathesis.replayKernel env constMap
     -- Looked up in the kernel environment: on one rebuilt from it, `Environment.find?` sees
     -- only imported constants, so it would miss every replayed one.
     let kenv := env'.toKernelEnv

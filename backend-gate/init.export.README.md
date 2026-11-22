@@ -43,7 +43,10 @@ cp init.export.anchor.lean <dir>/TrustAnchor.lean
 env LEAN_PATH=<dir> lean4export TrustAnchor -- Mathesis.trustAnchor > init.export
 ```
 
-Content is 563 constants (`python3 ci/export_stats.py --self-test`). Audit it by parsing and
+Content is 563 constants (`python3 ci/export_stats.py --self-test`).
+
+Another gate's `init.export` is made the same way from the same anchor, with that gate's toolchain and
+its own pinned lean4export (`gates/<version>/.lake/packages/lean4export`). Audit it by parsing and
 checking the genuine primitives are present with their expected types (`Iff`, `Eq`, `False`,
 `propext`, `Nat.gcd`, `Char.ofNat`, …).
 
