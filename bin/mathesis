@@ -739,6 +739,10 @@ def leg_rederive(only: str | None) -> int:
             # Exact equality, not subset. A manifest claiming FEWER axioms than the proof uses is
             # the interesting lie, and a whitelist check would pass it.
             fail(acc, f"axioms {sorted(target.get('axioms_reached') or [])} != manifest {sorted(a['axioms_reached'])}")
+        elif target.get("protected_reached") is None:
+            fail(acc, "the gate did not report which protected names the proof reaches")
+        elif sorted(target["protected_reached"]) != sorted(a.get("protected_names") or []):
+            fail(acc, f"protected names {sorted(target['protected_reached'])} != manifest {sorted(a.get('protected_names') or [])}")
         elif (bad := statement_mismatch(claim_by.get(a["claim_accession"]), target)):
             fail(acc, bad)
         else:

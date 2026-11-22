@@ -63,6 +63,8 @@ def permittedAxioms : Array Name := #[``propext, ``Classical.choice, ``Quot.soun
 /-- The whitelist rendered as strings, for the JSON `permitted` field. -/
 def permittedAxiomStrings : Array String := permittedAxioms.map (·.toString)
 
+def protectedNames : Array Name := #[`RiemannHypothesis, `FermatLastTheorem]
+
 /-! ### `collectAxioms` — informative axiom-reachability traversal
 
 Mirrors `CheckProof.Axioms.loop`'s worklist closure exactly, but ACCUMULATES every axiom it
@@ -109,18 +111,18 @@ end CollectAxioms
 /-- Every axiom transitively reached from `target`'s FULL dependency graph (type + value +
 children), in the candidate environment. Kind-agnostic (finding F4): works for `defnInfo`/
 `opaqueInfo` bodies as well as `thmInfo` proofs, matching the generalized `checkAxioms`. Purely
-informative — never gates. Returns `none` (with a note) rather than blocking the report if the
-traversal itself fails (e.g. a dangling constant reference), since the pass/fail decision comes from
-`checkAxioms` regardless. -/
-def collectAxioms (candidate : ExportedEnv) (target : Name) : Array Name × Option String :=
+informative — never gates. Also returns the `protectedNames` the same closure reaches, or `none` if
+the traversal itself fails (e.g. a dangling constant reference), so an unwalked closure is never
+reported as reaching nothing protected. -/
+def collectAxioms (candidate : ExportedEnv) (target : Name) : Array Name × Option (Array Name) :=
   match candidate.constMap[target]? with
-  | none => (#[], some s!"target absent from candidate: '{target}'")
+  | none => (#[], none)
   | some _ =>
     let run := CollectAxioms.loop.run { candidate }
       |>.run { worklist := #[target], checked := {}, reached := {} }
     match run with
-    | .ok ((), st) => (st.reached.toArray, none)
-    | .error e => (#[], some e)
+    | .ok ((), st) => (st.reached.toArray, some (protectedNames.filter st.checked.contains))
+    | .error _ => (#[], none)
 
 /-! ### Kind + triviality (finding F1/C2/C3 — bind the claim to the type)
 
@@ -234,6 +236,7 @@ structure TargetAudit where
   pass : Bool
   illegalAxiom : Option String
   axiomsReached : Array Name
+  protectedReached : Option (Array Name)
   triviality : Option String
   statement : Option String
 
@@ -298,10 +301,10 @@ def auditTarget (candidate : ExportedEnv) (permittedTypes : Std.HashMap Name Con
     match checkAxioms candidate #[decl] permittedAxioms permittedTypes trusted with
     | .ok () => (true, none)
     | .error e => (false, some e)
-  let (reached, _note) := collectAxioms candidate decl
+  let (reached, protectedReached) := collectAxioms candidate decl
   { decl,
     kind := match info? with | some i => kindString i | none => "absent",
-    pass, illegalAxiom, axiomsReached := reached,
+    pass, illegalAxiom, axiomsReached := reached, protectedReached,
     triviality := info?.bind (trivialityOf candidate.constMap),
     statement }
 
@@ -357,6 +360,10 @@ def targetAuditToJson (t : TargetAudit) : Json :=
     -- redefinitions until now.
     ("failure", match t.illegalAxiom with | some e => Json.str e | none => Json.null),
     ("axioms_reached", Json.arr (t.axiomsReached.map (Json.str ·.toString))),
+    ("protected_reached",
+      match t.protectedReached with
+      | some ns => Json.arr (ns.map (Json.str ·.toString))
+      | none => Json.null),
     ("triviality", match t.triviality with | some r => Json.str r | none => Json.null),
     -- The statement the kernel checked, rendered from the replayed term rather than from the
     -- author's environment. See `renderStatement`.
@@ -416,6 +423,7 @@ Output schema (one line, compact JSON):
  "kernel_builtins": "pass"|"not-checked"|"<reason string>",
  "targets": [{"decl": <string>, "axiom_audit": "pass"|"fail",
               "illegal_axiom": <string|null>, "axioms_reached": [<string>, ...],
+              "protected_reached": [<string>, ...]|null,
               "statement": <string|null>}, ...],
  "verdict": "ADMITTED"|"REJECTED"}
 ```

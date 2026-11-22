@@ -73,7 +73,8 @@ def main() -> int:
             return subprocess.CompletedProcess(cmd, 0, stdout=f"/sysroot/{Path(cwd).name}\n", stderr="")
         runs.append((cmd, env or {}))
         verdict = {"verdict": "ADMITTED", "replay": {"accepted": True},
-                   "targets": [{"decl": "thm", "triviality": None, "axioms_reached": []}]}
+                   "targets": [{"decl": "thm", "triviality": None, "axioms_reached": [],
+                                "protected_reached": []}]}
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(verdict), stderr="")
 
     cli.subprocess.run = fake_run
