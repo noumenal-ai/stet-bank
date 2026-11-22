@@ -23,3 +23,6 @@ exit 0 iff replay accepts AND every target's axiom closure ⊆ the hard-coded wh
 lean_exe «mathesis-adjudicate» where
   root := `MathesisAdjudicate
   supportInterpreter := true
+
+lean_exe «mathesis-hashes» where
+  root := `MathesisHashes

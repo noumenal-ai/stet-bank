@@ -19,3 +19,7 @@ lean_exe «mathesis-adjudicate» where
   srcDir := "../../backend-gate"
   root := `MathesisAdjudicate
   supportInterpreter := true
+
+lean_exe «mathesis-hashes» where
+  srcDir := "../../backend-gate"
+  root := `MathesisHashes

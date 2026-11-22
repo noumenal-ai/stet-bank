@@ -57,7 +57,7 @@ jobs:
       # ask for it by name so its presence does not depend on lean-action's build semantics.
       - name: Build the gate executable
         working-directory: backend-gate
-        run: lake build mathesis-adjudicate
+        run: lake build mathesis-adjudicate mathesis-hashes
 
       # Exported to $GITHUB_ENV rather than set on one step, because BOTH the built-ins
       # regression and `bin/mathesis verify` need it. Reducing this workflow set it on the verify
@@ -111,6 +111,9 @@ jobs:
       - name: The gate reports every protected name a proof reaches
         run: bash ci/test_gate_protected.sh
 
+      - name: The gate catches a redefinition the environment's constant hash list names
+        run: bash ci/test_gate_hashes.sh
+
       # The other half of "the record says what was proved". The two above keep the gate
       # meaning what it says about the TERM; this one is about the WORDS. Every check in the
       # re-derivation leg — verdict, replay, target presence, triviality, axioms — is a
@@ -126,8 +129,9 @@ jobs:
       - name: Build the v4.33.1 gate
         working-directory: gates/v4.33.1
         run: |
-          lake build mathesis-adjudicate
+          lake build mathesis-adjudicate mathesis-hashes
           test -x .lake/build/bin/mathesis-adjudicate || { echo "FATAL: v4.33.1 gate exe not built"; exit 1; }
+          test -x .lake/build/bin/mathesis-hashes || { echo "FATAL: v4.33.1 mathesis-hashes not built"; exit 1; }
           ( cd .lake/packages/lean4export && elan run "$(tr -d '[:space:]' < ../../../lean-toolchain)" lake build ) \
             || { echo "FATAL: v4.33.1 lean4export build failed"; exit 1; }
 
@@ -141,6 +145,7 @@ jobs:
           bash ci/test_gate_builtins.sh
           bash ci/test_gate_triviality.sh
           bash ci/test_gate_protected.sh
+          bash ci/test_gate_hashes.sh
           bash ci/test_gate_replay.sh
 
       - name: Each record runs the gate of its own toolchain

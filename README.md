@@ -100,6 +100,7 @@ is the whole point of reading this repository rather than taking its word.
 | `backend-gate/` | the Lean adjudicator, and `init.export`, the trusted logical core every replay is checked against |
 | `backend-gate/init.export.anchor.lean`, `.README.md` | how to rebuild that reference and compare it, rather than trusting it |
 | `gates/<version>/` | the same adjudicator built for another Lean toolchain: its own lakefile, `init.export` and kernel replay (`MathesisReplay.lean`); the sources are `backend-gate/`'s. A record runs the gate of its dictionary entry's toolchain |
+| `backend-gate/MathesisHashes.lean`, `Mathesis/Primitive/ConstHash.lean`, `Sha256.lean` | `mathesis-hashes`: an environment's constant hash list, and the hash the gate checks it with |
 | `bin/mathesis` | the program above |
 | `ci/test_gate_builtins.sh`, `ci/fixtures/` | the regression test below |
 | `ci/export_stats.py` | how `init.export`'s constant count is checked (`--self-test`) |
@@ -118,6 +119,29 @@ Breaking it deliberately is the honest way to trust it. Flip a byte in a cached 
 (the sha256 check fires before the kernel runs), edit one `axioms_reached` (the replay's exact-set
 comparison), delete one file from `bank/arguments/` (coverage), or point a claim at an accession
 that does not exist (crosslinks).
+
+## The environment's constant hash list
+
+A deposit can declare a constant under a name its environment already uses, as long as it does not
+import the module that defines it: `def Real : Type := Unit` in a file that never imports Mathlib's
+reals. The gate rejects that when the environment's genuine constant is in its trusted base. That
+base was 12,683 constants, the closure of 51 hand-picked Mathlib names.
+
+`mathesis-hashes <module> <out>` hashes every safe constant the module brings in: 766,105 for
+Mathlib `fabf563`, in 87 seconds and 85 MB. Each line is a SHA-256 and a name. The hash covers what
+`trustedMatches` compares, and nothing else: the kind, the number of universe parameters, the type,
+a definition's value, and an inductive's or constructor's shape. It ignores binder names and
+annotations, metadata and `let` non-dependence, as Lean's own expression equality does, and never
+a proof.
+
+Given `MATHESIS_CONSTANT_HASHES`, the gate hashes every constant a target reaches that the list
+names, and rejects a target whose hash differs: `trusted constant redefined`. A list that is set
+but empty, malformed or missing fails the gate rather than switching the check off.
+
+`verify` does not pass a list yet. That needs each record's dictionary entry to name its list.
+
+`ci/test_gate_hashes.sh` checks the SHA-256 against NIST's vectors and the system tool, and the
+gate against a redefinition that passes without the list and is named with it.
 
 ## Extraordinary claims
 

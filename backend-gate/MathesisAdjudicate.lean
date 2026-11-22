@@ -8,6 +8,7 @@ import Export.Parse
 import Mathesis.Verdict
 import Mathesis.Primitive.CheckProof
 import Mathesis.Manifest
+import Mathesis.Primitive.ConstHash
 
 /-!
 # `mathesis-adjudicate` — the security-critical re-derivation gate
@@ -111,18 +112,31 @@ end CollectAxioms
 /-- Every axiom transitively reached from `target`'s FULL dependency graph (type + value +
 children), in the candidate environment. Kind-agnostic (finding F4): works for `defnInfo`/
 `opaqueInfo` bodies as well as `thmInfo` proofs, matching the generalized `checkAxioms`. Purely
-informative — never gates. Also returns the `protectedNames` the same closure reaches, or `none` if
-the traversal itself fails (e.g. a dangling constant reference), so an unwalked closure is never
-reported as reaching nothing protected. -/
-def collectAxioms (candidate : ExportedEnv) (target : Name) : Array Name × Option (Array Name) :=
+informative — never gates. Also returns the closure itself, or `none` if the traversal fails (e.g. a
+dangling constant reference), so an unwalked closure is never read as reaching nothing. -/
+def collectAxioms (candidate : ExportedEnv) (target : Name) : Array Name × Option (Std.HashSet Name) :=
   match candidate.constMap[target]? with
   | none => (#[], none)
   | some _ =>
     let run := CollectAxioms.loop.run { candidate }
       |>.run { worklist := #[target], checked := {}, reached := {} }
     match run with
-    | .ok ((), st) => (st.reached.toArray, some (protectedNames.filter st.checked.contains))
+    | .ok ((), st) => (st.reached.toArray, some st.checked)
     | .error _ => (#[], none)
+
+def hashGuard (candidate : ExportedEnv) (listed : Std.HashMap String String)
+    (closure : Std.HashSet Name) : Option String :=
+  let differ := closure.fold (init := #[]) fun acc n =>
+    match listed[n.toString]?, candidate.constMap[n]? with
+    | some want, some ci =>
+      match ConstHash.hashHex ci with
+      | .ok got => if got == want then acc else acc.push n.toString
+      | .error _ => acc.push n.toString
+    | _, _ => acc
+  if differ.isEmpty then none
+  else
+    let first := (differ.qsort (· < ·))[0]!
+    some s!"trusted constant redefined: '{first}' (candidate's declaration differs from the environment's constant hash list; {differ.size} differ)"
 
 /-! ### Kind + triviality (finding F1/C2/C3 — bind the claim to the type)
 
@@ -295,13 +309,20 @@ def renderStatement (candidate : ExportedEnv) (decl : Name) : IO (Option String)
 `checkAxioms`; `triviality` is emitted for the CI to route to review but NEVER affects `pass` (a
 trivial theorem is valid, just mis-claimed). -/
 def auditTarget (candidate : ExportedEnv) (permittedTypes : Std.HashMap Name ConstantInfo)
-    (trusted : Name → Option ConstantInfo) (statement : Option String) (decl : Name) : TargetAudit :=
+    (trusted : Name → Option ConstantInfo) (listed : Option (Std.HashMap String String))
+    (statement : Option String) (decl : Name) : TargetAudit :=
   let info? := candidate.constMap[decl]?
+  let (reached, closure) := collectAxioms candidate decl
+  let protectedReached := closure.map fun c => protectedNames.filter c.contains
   let (pass, illegalAxiom) :=
-    match checkAxioms candidate #[decl] permittedAxioms permittedTypes trusted with
-    | .ok () => (true, none)
-    | .error e => (false, some e)
-  let (reached, protectedReached) := collectAxioms candidate decl
+    match checkAxioms candidate #[decl] permittedAxioms permittedTypes trusted, listed, closure with
+    | .error e, _, _ => (false, some e)
+    | .ok (), none, _ => (true, none)
+    | .ok (), some _, none => (false, some "the closure could not be walked for the constant hash list")
+    | .ok (), some l, some c =>
+      match hashGuard candidate l c with
+      | some e => (false, some e)
+      | none => (true, none)
   { decl,
     kind := match info? with | some i => kindString i | none => "absent",
     pass, illegalAxiom, axiomsReached := reached, protectedReached,
@@ -369,6 +390,23 @@ def targetAuditToJson (t : TargetAudit) : Json :=
     -- author's environment. See `renderStatement`.
     ("statement", match t.statement with | some s => Json.str s | none => Json.null)
   ]
+
+def loadHashList (path : System.FilePath) : IO (Std.HashMap String String) := do
+  let mut m : Std.HashMap String String := {}
+  let mut lineNo := 0
+  for line in ← IO.FS.lines path do
+    lineNo := lineNo + 1
+    if line.isEmpty || line.startsWith "#" then continue
+    match line.splitOn "\t" with
+    | h :: rest@(_ :: _) =>
+      let n := "\t".intercalate rest
+      if h.length != 64 || !h.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) || n.isEmpty then
+        throw <| IO.userError s!"malformed constant hash list, line {lineNo}"
+      m := m.insert n h
+    | _ => throw <| IO.userError s!"malformed constant hash list, line {lineNo}"
+  if m.isEmpty then
+    throw <| IO.userError s!"the constant hash list {path} lists no constants"
+  return m
 
 /-! ### Argv parsing -/
 
@@ -462,6 +500,15 @@ def main (args : List String) : IO UInt32 := do
     | none =>
       IO.eprintln "note: MATHESIS_INIT_EXPORT not set; trusted-redefinition and kernel built-in checks DISABLED (type-binding active)"
       pure ((fun _ => none), false)
+  let listed : Option (Std.HashMap String String) ← do
+    match ← IO.getEnv "MATHESIS_CONSTANT_HASHES" with
+    | some p =>
+      let l ← loadHashList p
+      IO.eprintln s!"constant hash list loaded: {l.size} constants"
+      pure (some l)
+    | none =>
+      IO.eprintln "note: MATHESIS_CONSTANT_HASHES not set; the environment-wide redefinition check is DISABLED"
+      pure none
   match parseArgs args with
   | .error msg =>
     IO.eprintln msg
@@ -472,7 +519,7 @@ def main (args : List String) : IO UInt32 := do
     let (accepted, detail) ← replayLean candidate
     let mut audits : Array TargetAudit := #[]
     for d in targets do
-      audits := audits.push (auditTarget candidate permittedTypes trusted (← renderStatement candidate d) d)
+      audits := audits.push (auditTarget candidate permittedTypes trusted listed (← renderStatement candidate d) d)
     let allPass := audits.all (·.pass)
     -- Kernel built-ins leg, in every mode: each one the candidate carries must be the genuine one.
     -- The kernel uses them by name without checking them, and the axiom walk never reaches them.
@@ -504,6 +551,7 @@ def main (args : List String) : IO UInt32 := do
       ("replay", Json.mkObj [("accepted", Json.bool accepted), ("detail", Json.str detail)]),
       ("permitted", Json.arr (permittedAxiomStrings.map Json.str)),
       ("statement_identity", statementJson),
+      ("constant_hashes", match listed with | some l => Json.num l.size | none => Json.null),
       ("kernel_builtins", Json.str (match builtinsResult with
         | .ok _ => if trustedActive then "pass" else "not-checked"
         | .error e => e)),
