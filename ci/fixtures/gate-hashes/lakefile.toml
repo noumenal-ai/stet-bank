@@ -1,0 +1,11 @@
+name = "gatehashes"
+version = "0.1.0"
+
+[[lean_lib]]
+name = "Ref"
+
+[[lean_lib]]
+name = "Honest"
+
+[[lean_lib]]
+name = "Cand"
