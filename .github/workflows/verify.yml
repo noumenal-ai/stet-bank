@@ -108,6 +108,9 @@ jobs:
       - name: The gate still flags a vacuous statement
         run: bash ci/test_gate_triviality.sh
 
+      - name: The gate reports every protected name a proof reaches
+        run: bash ci/test_gate_protected.sh
+
       # The other half of "the record says what was proved". The two above keep the gate
       # meaning what it says about the TERM; this one is about the WORDS. Every check in the
       # re-derivation leg — verdict, replay, target presence, triviality, axioms — is a
@@ -137,10 +140,14 @@ jobs:
           test -n "$LEAN4EXPORT" || { echo "FATAL: v4.33.1 lean4export exe not found"; exit 1; }
           bash ci/test_gate_builtins.sh
           bash ci/test_gate_triviality.sh
+          bash ci/test_gate_protected.sh
           bash ci/test_gate_replay.sh
 
       - name: Each record runs the gate of its own toolchain
         run: python3 ci/test_gate_routing.py
+
+      - name: A record names every protected name its proof reaches
+        run: python3 ci/test_protected_names.py
 
       # A blob that does not arrive must say why. The old message said the bank was missing the
       # evidence for a record, which is a claim about the corpus that a failed download is in no

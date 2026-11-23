@@ -288,6 +288,14 @@
         "profile_id": {
           "$ref": "#/$defs/uuid"
         },
+        "protected_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "The protected names (the gate's protectedNames) the proof's full closure reaches, statement and proof, VERBATIM from the adjudicator's report. Absent means none. bin/mathesis verify requires exact set equality against a fresh replay, so a record cannot leave out the claim it makes."
+        },
         "replay_detail": {
           "type": "string"
         },

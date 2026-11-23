@@ -64,7 +64,7 @@ cannot run is an error, not a pass.
 | **crosslinks** | every argument names a claim that exists, every relation names two that do and a profile that does, and every topic a claim is filed under is one that exists |
 | **dependencies** | a declaration name the record publishes means **one** statement: an argument's root carries the statement digest of the claim it discharges, and any step naming another claim's declaration carries that claim's digest too |
 | **coverage** | the number re-derived equals the number present — "31 of 32 clean" must not print as "clean" |
-| **re-derivation** | fetch `<export_sha256>.export.gz`, check the decompressed bytes against that sha256, replay through `mathesis-adjudicate`, and require ADMITTED, an accepted replay, no triviality flag, and **exactly** the axioms the manifest claims |
+| **re-derivation** | fetch `<export_sha256>.export.gz`, check the decompressed bytes against that sha256, replay through `mathesis-adjudicate`, and require ADMITTED, an accepted replay, no triviality flag, **exactly** the axioms the manifest claims, and **exactly** the protected names it claims (below) |
 
 The last is the one that matters, and `backend-gate/` is the source to read. The first four
 catch a manifest that lies about its own shape or about what else exists; the last catches one
@@ -118,6 +118,39 @@ Breaking it deliberately is the honest way to trust it. Flip a byte in a cached 
 (the sha256 check fires before the kernel runs), edit one `axioms_reached` (the replay's exact-set
 comparison), delete one file from `bank/arguments/` (coverage), or point a claim at an accession
 that does not exist (crosslinks).
+
+## Extraordinary claims
+
+A proof of a famous open problem is never published on one green check.
+
+The gate keeps a list of protected names, `protectedNames` in `backend-gate/MathesisAdjudicate.lean`.
+Today it holds Mathlib's `RiemannHypothesis` and `FermatLastTheorem`. Changing it is a pull request
+against the gate, like any other change to what the gate checks.
+
+**What is enforced:**
+
+- The gate reports every protected name a proof reaches, through its statement or anywhere in its
+  proof, as `protected_reached`. A wrapper definition does not hide one, and neither does a lemma
+  buried inside the proof of something modest.
+- A deposit that reaches one is never admitted automatically. It waits for a maintainer.
+- The record carries the list as `protected_names`, and `verify` requires it to equal a fresh
+  replay's. A record cannot leave out the claim it makes.
+
+**What is policy, and not yet enforced by code:**
+
+- Two named maintainers approve the merge, after a public waiting period. Who they are, and how long
+  the period runs, are still to be decided.
+- A second, independent kernel replays the same export on a separate machine.
+- Someone outside the team reproduces the result from the published files.
+
+**What such a record says:** only that this export typechecks, that its statement reaches the
+protected definition by name, and that it uses only the three permitted axioms. Nothing about the
+mathematics beyond that.
+
+**What the list does not catch.** It matches names. The same statement written out under another
+name reaches no protected name, and is treated like any other deposit. And a deposit can define its
+own `RiemannHypothesis`; the list sends that to review too, where the reviewer must confirm the name
+is Mathlib's own definition at the record's revision.
 
 ## Adding a record
 
