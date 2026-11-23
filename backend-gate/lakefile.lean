@@ -10,6 +10,8 @@ require lean4export from git
 require Lean4Checker from git
   "https://github.com/leanprover/lean4checker" @ "b7398199245524275543dec6113229c9bb4902e5"
 
+lean_lib MathesisReplay
+
 @[default_target]
 lean_lib Mathesis where
   globs := #[Glob.andSubmodules `Mathesis]

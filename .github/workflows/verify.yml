@@ -117,6 +117,31 @@ jobs:
       - name: A record publishes the statement the kernel checked
         run: python3 ci/test_statement_binding.py
 
+      - name: The gate replays a quotient proof and rejects a sorry
+        run: bash ci/test_gate_replay.sh
+
+      - name: Build the v4.33.1 gate
+        working-directory: gates/v4.33.1
+        run: |
+          lake build mathesis-adjudicate
+          test -x .lake/build/bin/mathesis-adjudicate || { echo "FATAL: v4.33.1 gate exe not built"; exit 1; }
+          ( cd .lake/packages/lean4export && elan run "$(tr -d '[:space:]' < ../../../lean-toolchain)" lake build ) \
+            || { echo "FATAL: v4.33.1 lean4export build failed"; exit 1; }
+
+      - name: The v4.33.1 gate passes the same regression tests
+        run: |
+          G="$GITHUB_WORKSPACE/gates/v4.33.1"
+          export GATE_DIR="$G" MATHESIS_ADJUDICATE="$G/.lake/build/bin/mathesis-adjudicate"
+          export LEAN4EXPORT="$(find "$G/.lake/packages/lean4export/.lake" -type f -name lean4export -perm -u+x | head -n1)"
+          export LEAN_SYSROOT="$(cd "$G" && lean --print-prefix)"
+          test -n "$LEAN4EXPORT" || { echo "FATAL: v4.33.1 lean4export exe not found"; exit 1; }
+          bash ci/test_gate_builtins.sh
+          bash ci/test_gate_triviality.sh
+          bash ci/test_gate_replay.sh
+
+      - name: Each record runs the gate of its own toolchain
+        run: python3 ci/test_gate_routing.py
+
       # A blob that does not arrive must say why. The old message said the bank was missing the
       # evidence for a record, which is a claim about the corpus that a failed download is in no
       # position to make.

@@ -26,7 +26,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${MATHESIS_ADJUDICATE:?the gate binary}" "${LEAN4EXPORT:?the lean4export binary}"
-TRUSTED="$ROOT/backend-gate/init.export"
+TRUSTED="${GATE_DIR:-$ROOT/backend-gate}/init.export"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
@@ -46,7 +46,7 @@ echo "gate kernel built-ins"
 echo
 
 cp -R "$ROOT/ci/fixtures/gate-builtins/." "$TMP/"
-cp "$ROOT/backend-gate/lean-toolchain" "$TMP/"
+cp "${GATE_DIR:-$ROOT/backend-gate}/lean-toolchain" "$TMP/"
 ( cd "$TMP" && lake build GcdRef GcdCand CharRef CharCand Honest HoleRef HoleCand ) > "$TMP/build.log" 2>&1 \
   || { echo "FATAL: fixtures failed to build"; tail -20 "$TMP/build.log"; exit 1; }
 

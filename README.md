@@ -23,10 +23,11 @@ bin/mathesis verify
 That builds the gate, downloads the evidence, and re-derives every record. It is honest about
 what it costs the first time:
 
-- **A Lean toolchain.** `elan`, `leanprover/lean4:v4.31.0`, and the two dependencies pinned in
-  `backend-gate/lake-manifest.json` (`lean4export`, `Lean4Checker`). `.lake/` is not committed.
-  No prebuilt binary is shipped on purpose — an opaque blob nobody can rebuild and compare
-  would undercut the only claim this repository makes.
+- **A Lean toolchain per gate.** `elan`, and the toolchain of each gate the record uses:
+  `leanprover/lean4:v4.31.0` for `backend-gate/`, `leanprover/lean4:v4.33.1` for
+  `gates/v4.33.1/`. Each pins its own dependencies in its `lake-manifest.json`. `.lake/` is not
+  committed. No prebuilt binary is shipped on purpose — an opaque blob nobody can rebuild and
+  compare would undercut the only claim this repository makes.
 - **Downloads.** The frozen exports run to hundreds of megabytes per record uncompressed, which
   is not something git should carry. They live on the
   [`bank-exports-v1`](https://github.com/noumenal-ai/stet-bank/releases/tag/bank-exports-v1)
@@ -98,6 +99,7 @@ is the whole point of reading this repository rather than taking its word.
 | `bank/tools/verify-bank.sh` | the re-derivation leg on its own, if you would rather run it directly |
 | `backend-gate/` | the Lean adjudicator, and `init.export`, the trusted logical core every replay is checked against |
 | `backend-gate/init.export.anchor.lean`, `.README.md` | how to rebuild that reference and compare it, rather than trusting it |
+| `gates/<version>/` | the same adjudicator built for another Lean toolchain: its own lakefile, `init.export` and kernel replay (`MathesisReplay.lean`); the sources are `backend-gate/`'s. A record runs the gate of its dictionary entry's toolchain |
 | `bin/mathesis` | the program above |
 | `ci/test_gate_builtins.sh`, `ci/fixtures/` | the regression test below |
 | `ci/export_stats.py` | how `init.export`'s constant count is checked (`--self-test`) |

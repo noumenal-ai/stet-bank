@@ -60,7 +60,7 @@ echo "gate triviality"
 echo
 
 cp -R "$ROOT/ci/fixtures/gate-triviality/." "$TMP/"
-cp "$ROOT/backend-gate/lean-toolchain" "$TMP/"
+cp "${GATE_DIR:-$ROOT/backend-gate}/lean-toolchain" "$TMP/"
 ( cd "$TMP" && lake build Cases ) > "$TMP/build.log" 2>&1 \
   || { echo "FATAL: fixtures failed to build"; tail -20 "$TMP/build.log"; exit 1; }
 

@@ -521,8 +521,61 @@ def fetch(name: str, cache: Path) -> str | None:
     return why[-1][:120] if why else f"{cmd[0]} exited {proc.returncode} and wrote no reason"
 
 
-def build_gate(exe: Path) -> bool:
-    """Build the adjudicator from the source in backend-gate/. Returns whether `exe` now exists.
+DEFAULT_GATE = ROOT / "backend-gate"
+GATES = ROOT / "gates"
+
+
+def gate_toolchain(gate: Path) -> str:
+    return (gate / "lean-toolchain").read_text(encoding="utf-8").strip()
+
+
+def gate_for(toolchain: str) -> Path:
+    if toolchain == gate_toolchain(DEFAULT_GATE):
+        return DEFAULT_GATE
+    return GATES / toolchain.rpartition(":")[2]
+
+
+def dictionary_toolchains() -> dict[str, str]:
+    doc = load(DICTIONARY)
+    entries = doc if isinstance(doc, list) else [doc]
+    return {e["id"]: e["toolchain"] for e in entries}
+
+
+def gate_exe(gate: Path) -> Path:
+    if gate == DEFAULT_GATE and os.environ.get("MATHESIS_ADJUDICATE"):
+        return Path(os.environ["MATHESIS_ADJUDICATE"])
+    return gate / ".lake" / "build" / "bin" / "mathesis-adjudicate"
+
+
+def gate_init(gate: Path) -> Path:
+    if gate == DEFAULT_GATE and os.environ.get("MATHESIS_INIT_EXPORT"):
+        return Path(os.environ["MATHESIS_INIT_EXPORT"])
+    return gate / "init.export"
+
+
+def ready_gate(gate: Path, ready: dict) -> tuple[Path, dict] | str:
+    if gate in ready:
+        return ready[gate]
+    exe = gate_exe(gate)
+    if not gate.is_dir():
+        ready[gate] = f"no gate for this toolchain at {gate.relative_to(ROOT)}/"
+    elif not (exe.is_file() and os.access(exe, os.X_OK)) and not build_gate(exe, gate):
+        ready[gate] = (f"the gate is not built at {exe}, and building it here did not produce it. "
+                       "It needs a Lean toolchain: install elan (https://github.com/leanprover/elan), "
+                       f"then `cd {gate.relative_to(ROOT)} && lake build mathesis-adjudicate`")
+    elif not gate_init(gate).is_file() or not gate_init(gate).stat().st_size:
+        ready[gate] = f"the trusted logical core is missing or empty at {gate_init(gate)}"
+    else:
+        prefix = subprocess.run(["lean", "--print-prefix"], cwd=gate, capture_output=True, text=True)
+        env = {**os.environ, "MATHESIS_INIT_EXPORT": str(gate_init(gate))}
+        if prefix.returncode == 0 and prefix.stdout.strip():
+            env["LEAN_SYSROOT"] = prefix.stdout.strip()
+        ready[gate] = (exe, env)
+    return ready[gate]
+
+
+def build_gate(exe: Path, pkg: Path = DEFAULT_GATE) -> bool:
+    """Build the adjudicator from the source in `pkg`. Returns whether `exe` now exists.
 
     Doing this here is the difference between "clone and run the program" and "clone, read an
     error, go and read a second set of instructions, then run the program". It is a real build —
@@ -533,7 +586,6 @@ def build_gate(exe: Path) -> bool:
     nobody can rebuild and compare, and this repository's whole claim is that you do not have to
     take its word for anything.
     """
-    pkg = ROOT / "backend-gate"
     if shutil.which("lake") is None:
         return False
     print(f"  the gate is not built — building it from {pkg.name}/ (this takes a few minutes)\n")
@@ -627,18 +679,12 @@ def leg_standing() -> None:
 
 def leg_rederive(only: str | None) -> int:
     """Replay each frozen export through the Lean kernel and compare it to its manifest."""
-    exe = Path(os.environ.get(
-        "MATHESIS_ADJUDICATE", ROOT / "backend-gate" / ".lake" / "build" / "bin" / "mathesis-adjudicate"))
-    if not (exe.is_file() and os.access(exe, os.X_OK)) and not build_gate(exe):
-        fail("re-derivation",
-             f"the gate is not built at {exe}, and building it here did not produce it. "
-             "It needs a Lean toolchain: install elan (https://github.com/leanprover/elan), "
-             "then `cd backend-gate && lake build mathesis-adjudicate`")
+    ready: dict = {}
+    default = ready_gate(DEFAULT_GATE, ready)
+    if isinstance(default, str):
+        fail("re-derivation", default)
         return 0
-    init = Path(os.environ.get("MATHESIS_INIT_EXPORT", ROOT / "backend-gate" / "init.export"))
-    if not init.is_file() or not init.stat().st_size:
-        fail("re-derivation", f"the trusted logical core is missing or empty at {init}")
-        return 0
+    toolchains = dictionary_toolchains()
     cache = Path(os.environ.get("BANK_EXPORTS_DIR", Path(os.environ.get("TMPDIR", "/tmp")) / "stet-bank-exports"))
 
     claim_by = {c["accession"]: c for c in claims()}
@@ -648,6 +694,15 @@ def leg_rederive(only: str | None) -> int:
         if only and a["accession"] != only:
             continue
         acc, sha, decl = a["accession"], a["export_sha256"], a["root_decl_name"]
+        toolchain = toolchains.get(a["dictionary_id"])
+        if toolchain is None:
+            fail(acc, f"its dictionary entry {a['dictionary_id']} is not in dictionary.json")
+            continue
+        gate = ready_gate(gate_for(toolchain), ready)
+        if isinstance(gate, str):
+            fail(acc, f"{toolchain}: {gate}")
+            continue
+        exe, env = gate
         name = f"{sha}.export.gz"
         why = fetch(name, cache)
         if why is not None:
@@ -664,7 +719,6 @@ def leg_rederive(only: str | None) -> int:
             fail(acc, f"evidence hashes to {got[:16]}…, manifest says {sha[:16]}…")
             raw.unlink(missing_ok=True)
             continue
-        env = {**os.environ, "MATHESIS_INIT_EXPORT": str(init)}
         proc = subprocess.run([str(exe), str(raw), "--", decl], capture_output=True, text=True, env=env)
         raw.unlink(missing_ok=True)
         try:

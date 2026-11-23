@@ -19,3 +19,4 @@ __pycache__/
 # every replay is checked against, it is under 1 MB, and a reference you have to download is a
 # reference you have to trust somebody about.
 !backend-gate/init.export
+!gates/*/init.export

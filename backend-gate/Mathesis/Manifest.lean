@@ -71,6 +71,10 @@ def loadFrozenText (exportText : String) : IO ExportedEnv := do
   let ref ← IO.mkRef { data := exportText.toUTF8 : IO.FS.Stream.Buffer }
   Export.parseStream (IO.FS.Stream.ofBuffer ref)
 
+def loadFrozenFile (path : System.FilePath) : IO ExportedEnv := do
+  let handle ← IO.FS.Handle.mk path .read
+  Export.parseStream (IO.FS.Stream.ofHandle handle)
+
 /-- **Durable freeze (IO boundary).** Run `lean4export` on the bank's claim `module`, exporting
 `decls` (+ the kernel primitives), returning the export text to persist as the immutable accession
 reference. Mirrors Comparator's `safeExport`; in production this call is wrapped by isolation

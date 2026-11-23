@@ -448,7 +448,7 @@ def main (args : List String) : IO UInt32 := do
   let (trusted, trustedActive) : (Name → Option ConstantInfo) × Bool ← do
     match ← IO.getEnv "MATHESIS_INIT_EXPORT" with
     | some p =>
-      let tEnv ← loadFrozenText (← IO.FS.readFile p)
+      let tEnv ← loadFrozenFile p
       IO.eprintln s!"trusted init.export loaded: {tEnv.constMap.size} constants"
       pure ((fun n => tEnv.constMap[n]?), true)
     | none =>
@@ -460,8 +460,7 @@ def main (args : List String) : IO UInt32 := do
     return 1
   | .ok (reference?, path, declStrs) =>
     let targets : Array Name := (declStrs.map (·.toName)).toArray
-    let text ← IO.FS.readFile path
-    let candidate ← loadFrozenText text
+    let candidate ← loadFrozenFile path
     let (accepted, detail) ← replayLean candidate
     let mut audits : Array TargetAudit := #[]
     for d in targets do
@@ -481,7 +480,7 @@ def main (args : List String) : IO UInt32 := do
       | none =>
         pure (LegResult.pass, Json.str "not-applicable")
       | some refPath => do
-        let reference ← loadFrozenText (← IO.FS.readFile refPath)
+        let reference ← loadFrozenFile refPath
         let report ← checkProof reference candidate targets permittedAxioms #[]
                         (permittedTypes := permittedTypes) (trusted := trusted)
         match report.statement with
