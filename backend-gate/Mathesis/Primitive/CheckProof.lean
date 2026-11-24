@@ -49,14 +49,19 @@ Without this, a statement whose type reaches a constant only through a projectio
 that structure's `ConstantInfo` for comparison — letting a candidate smuggle a divergent definition
 of `S` behind a byte-identical `.proj` node (statement-identity closure gap). Folded in alongside
 `getUsedConstants` in `runForUsedConsts` so both the identity and axiom closures see projected types. -/
-partial def collectProjTypes : Expr → Array Name → Array Name
-  | .proj tn _ s, acc => collectProjTypes s (acc.push tn)
-  | .app f a,       acc => collectProjTypes a (collectProjTypes f acc)
-  | .lam _ t b _,   acc => collectProjTypes b (collectProjTypes t acc)
-  | .forallE _ t b _, acc => collectProjTypes b (collectProjTypes t acc)
-  | .letE _ t v b _, acc => collectProjTypes b (collectProjTypes v (collectProjTypes t acc))
-  | .mdata _ b,     acc => collectProjTypes b acc
-  | _,              acc => acc
+partial def collectProjTypes (e : Expr) (acc : Array Name) : Array Name :=
+  ((go e).run ({}, acc)).2.2
+where
+  go (e : Expr) : StateM (Std.HashSet Expr × Array Name) Unit := do
+    if (← get).1.contains e then return
+    modify fun (seen, acc) => (seen.insert e, acc)
+    match e with
+    | .proj tn _ s => modify (fun (seen, acc) => (seen, acc.push tn)); go s
+    | .app f a => go f; go a
+    | .lam _ t b _ | .forallE _ t b _ => go t; go b
+    | .letE _ t v b _ => go t; go v; go b
+    | .mdata _ b => go b
+    | _ => pure ()
 
 /-- Canonicalize a declaration's type by renaming its universe parameters to a positional sequence,
 so two types that differ ONLY in universe-parameter *names* compare equal. Used to bind a permitted
