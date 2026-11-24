@@ -34,11 +34,6 @@ open Lean Export
 
 /-! ### In-process reference extraction (the trusted-environment freeze) -/
 
-/-- Every constant referenced by `ci`, collected into an array (reuses the gate's traversal). -/
-def usedConstsOf (ci : ConstantInfo) : Array Name :=
-  (Mathesis.CheckProof.runForUsedConsts (m := StateM (Array Name)) ci (deep := false)
-    (fun n => modify (·.push n))).run #[] |>.2
-
 /-- Worklist closure building a constant map from a trusted environment. -/
 partial def buildConstMap (env : Environment) (work : Array Name)
     (cm : Std.HashMap Name ConstantInfo) (seen : Std.HashSet Name) :
@@ -49,7 +44,7 @@ partial def buildConstMap (env : Environment) (work : Array Name)
     let rest := work.pop
     if seen.contains n then buildConstMap env rest cm seen
     else match env.find? n with
-      | some ci => buildConstMap env (rest ++ usedConstsOf ci) (cm.insert n ci) (seen.insert n)
+      | some ci => buildConstMap env (rest ++ CheckProof.usedConsts ci (deep := false)) (cm.insert n ci) (seen.insert n)
       | none => buildConstMap env rest cm (seen.insert n)
 
 /-- **TEST-ONLY. Do NOT use to freeze `R` for ingestion (finding F7).** This in-process extractor

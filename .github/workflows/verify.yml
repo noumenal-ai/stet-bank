@@ -126,6 +126,9 @@ jobs:
       - name: The gate replays a quotient proof and rejects a sorry
         run: bash ci/test_gate_replay.sh
 
+      - name: The gate walks a shared proof term once, not once per path
+        run: bash ci/test_gate_shared.sh
+
       - name: Build the v4.33.1 gate
         working-directory: gates/v4.33.1
         run: |
@@ -147,6 +150,7 @@ jobs:
           bash ci/test_gate_protected.sh
           bash ci/test_gate_hashes.sh
           bash ci/test_gate_replay.sh
+          bash ci/test_gate_shared.sh
 
       - name: Each record runs the gate of its own toolchain
         run: python3 ci/test_gate_routing.py

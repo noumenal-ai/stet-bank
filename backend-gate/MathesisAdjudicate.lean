@@ -77,6 +77,7 @@ namespace CollectAxioms
 
 structure Ctx where
   candidate : ExportedEnv
+  uses : Std.HashMap Name (Array Name)
 
 structure St where
   worklist : Array Name
@@ -95,7 +96,10 @@ partial def loop : M Unit := do
     let some info := (← read).candidate.constMap[target]?
       | throw s!"constant absent from candidate: '{target}'"
     -- deep: mirror the axiom-audit closure so `axioms_reached` reflects proof-side axioms too.
-    runForUsedConsts info (deep := true) visit
+    let used := match (← read).uses[target]? with
+      | some ns => ns
+      | none => usedConsts info (deep := true)
+    used.forM visit
     modify fun s => { s with checked := s.checked.insert target }
     loop
 where
@@ -114,11 +118,12 @@ children), in the candidate environment. Kind-agnostic (finding F4): works for `
 `opaqueInfo` bodies as well as `thmInfo` proofs, matching the generalized `checkAxioms`. Purely
 informative — never gates. Also returns the closure itself, or `none` if the traversal fails (e.g. a
 dangling constant reference), so an unwalked closure is never read as reaching nothing. -/
-def collectAxioms (candidate : ExportedEnv) (target : Name) : Array Name × Option (Std.HashSet Name) :=
+def collectAxioms (candidate : ExportedEnv) (uses : Std.HashMap Name (Array Name)) (target : Name) :
+    Array Name × Option (Std.HashSet Name) :=
   match candidate.constMap[target]? with
   | none => (#[], none)
   | some _ =>
-    let run := CollectAxioms.loop.run { candidate }
+    let run := CollectAxioms.loop.run { candidate, uses }
       |>.run { worklist := #[target], checked := {}, reached := {} }
     match run with
     | .ok ((), st) => (st.reached.toArray, some st.checked)
@@ -308,14 +313,15 @@ def renderStatement (candidate : ExportedEnv) (decl : Name) : IO (Option String)
 `candidate`, using the hard-coded `permittedAxioms`. `pass`/`illegalAxiom` are decided SOLELY by
 `checkAxioms`; `triviality` is emitted for the CI to route to review but NEVER affects `pass` (a
 trivial theorem is valid, just mis-claimed). -/
-def auditTarget (candidate : ExportedEnv) (permittedTypes : Std.HashMap Name ConstantInfo)
+def auditTarget (candidate : ExportedEnv) (uses : Std.HashMap Name (Array Name))
+    (permittedTypes : Std.HashMap Name ConstantInfo)
     (trusted : Name → Option ConstantInfo) (listed : Option (Std.HashMap String String))
     (statement : Option String) (decl : Name) : TargetAudit :=
   let info? := candidate.constMap[decl]?
-  let (reached, closure) := collectAxioms candidate decl
+  let (reached, closure) := collectAxioms candidate uses decl
   let protectedReached := closure.map fun c => protectedNames.filter c.contains
   let (pass, illegalAxiom) :=
-    match checkAxioms candidate #[decl] permittedAxioms permittedTypes trusted, listed, closure with
+    match checkAxioms candidate #[decl] permittedAxioms permittedTypes trusted uses, listed, closure with
     | .error e, _, _ => (false, some e)
     | .ok (), none, _ => (true, none)
     | .ok (), some _, none => (false, some "the closure could not be walked for the constant hash list")
@@ -517,9 +523,10 @@ def main (args : List String) : IO UInt32 := do
     let targets : Array Name := (declStrs.map (·.toName)).toArray
     let candidate ← loadFrozenFile path
     let (accepted, detail) ← replayLean candidate
+    let uses := deepUses candidate targets
     let mut audits : Array TargetAudit := #[]
     for d in targets do
-      audits := audits.push (auditTarget candidate permittedTypes trusted listed (← renderStatement candidate d) d)
+      audits := audits.push (auditTarget candidate uses permittedTypes trusted listed (← renderStatement candidate d) d)
     let allPass := audits.all (·.pass)
     -- Kernel built-ins leg, in every mode: each one the candidate carries must be the genuine one.
     -- The kernel uses them by name without checking them, and the axiom walk never reaches them.
@@ -537,7 +544,7 @@ def main (args : List String) : IO UInt32 := do
       | some refPath => do
         let reference ← loadFrozenFile refPath
         let report ← checkProof reference candidate targets permittedAxioms #[]
-                        (permittedTypes := permittedTypes) (trusted := trusted)
+                        (permittedTypes := permittedTypes) (trusted := trusted) (uses := uses)
         match report.statement with
         | .pass       => pure (LegResult.pass, Json.str "pass")
         | .fail reason => pure (LegResult.fail reason, Json.str reason)

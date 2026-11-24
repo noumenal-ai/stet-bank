@@ -49,14 +49,19 @@ Without this, a statement whose type reaches a constant only through a projectio
 that structure's `ConstantInfo` for comparison — letting a candidate smuggle a divergent definition
 of `S` behind a byte-identical `.proj` node (statement-identity closure gap). Folded in alongside
 `getUsedConstants` in `runForUsedConsts` so both the identity and axiom closures see projected types. -/
-partial def collectProjTypes : Expr → Array Name → Array Name
-  | .proj tn _ s, acc => collectProjTypes s (acc.push tn)
-  | .app f a,       acc => collectProjTypes a (collectProjTypes f acc)
-  | .lam _ t b _,   acc => collectProjTypes b (collectProjTypes t acc)
-  | .forallE _ t b _, acc => collectProjTypes b (collectProjTypes t acc)
-  | .letE _ t v b _, acc => collectProjTypes b (collectProjTypes v (collectProjTypes t acc))
-  | .mdata _ b,     acc => collectProjTypes b acc
-  | _,              acc => acc
+partial def collectProjTypes (e : Expr) (acc : Array Name) : Array Name :=
+  ((go e).run ({}, acc)).2.2
+where
+  go (e : Expr) : StateM (Std.HashSet Expr × Array Name) Unit := do
+    if (← get).1.contains e then return
+    modify fun (seen, acc) => (seen.insert e, acc)
+    match e with
+    | .proj tn _ s => modify (fun (seen, acc) => (seen, acc.push tn)); go s
+    | .app f a => go f; go a
+    | .lam _ t b _ | .forallE _ t b _ => go t; go b
+    | .letE _ t v b _ => go t; go v; go b
+    | .mdata _ b => go b
+    | _ => pure ()
 
 /-- Canonicalize a declaration's type by renaming its universe parameters to a positional sequence,
 so two types that differ ONLY in universe-parameter *names* compare equal. Used to bind a permitted
@@ -124,6 +129,9 @@ def runForUsedConsts {m : Type → Type} [Monad m] (info : ConstantInfo) (deep :
   | .inductInfo iv => iv.ctors.forM f; iv.all.forM f
   | .ctorInfo cv => f cv.induct
   | .recInfo rv => rv.rules.forM fun rule => do f rule.ctor; rule.rhs.getUsedConstants.forM f
+
+def usedConsts (info : ConstantInfo) (deep : Bool) : Array Name :=
+  (runForUsedConsts (m := StateM (Array Name)) info deep (fun n => modify (·.push n))).run #[] |>.2
 
 deriving instance BEq for QuotKind
 deriving instance BEq for QuotVal
@@ -217,6 +225,7 @@ structure Ctx where
   as a redefinition of a trusted logical-core constant — this closes the fake-connective (`Iff`/`Eq`/
   `False`) class the axiom type-binding alone leaves open. `fun _ => none` ⇒ no base check (legacy). -/
   trusted : Name → Option ConstantInfo := fun _ => none
+  uses : Std.HashMap Name (Array Name) := {}
 
 structure St where
   worklist : Array Name
@@ -234,7 +243,10 @@ partial def loop : M Unit := do
     let some info := (← read).candidate.constMap[target]?
       | throw s!"constant absent from candidate: '{target}'"
     -- deep: the axiom audit MUST walk theorem proofs + opaque bodies (or a proof-side sorry hides).
-    runForUsedConsts info (deep := true) validateConst
+    let used := match (← read).uses[target]? with
+      | some ns => ns
+      | none => usedConsts info (deep := true)
+    used.forM validateConst
     modify fun s => { s with checked := s.checked.insert target }
     loop
 where
@@ -273,15 +285,29 @@ value + children — this also audits a theorem's TYPE-side constants (matching 
 closure), which the previous proof-value-only seeding missed. -/
 def checkAxioms (candidate : ExportedEnv) (targets permitted : Array Name)
     (permittedTypes : Std.HashMap Name ConstantInfo := {})
-    (trusted : Name → Option ConstantInfo := fun _ => none) :
+    (trusted : Name → Option ConstantInfo := fun _ => none)
+    (uses : Std.HashMap Name (Array Name) := {}) :
     Except String Unit := do
   let mut worklist := #[]
   for target in targets do
     if !candidate.constMap.contains target then
       throw s!"target absent from candidate: '{target}'"
     worklist := worklist.push target
-  Axioms.loop.run { candidate, permitted := Std.HashSet.ofArray permitted, permittedTypes, trusted }
+  Axioms.loop.run { candidate, permitted := Std.HashSet.ofArray permitted, permittedTypes, trusted, uses }
     |>.run' { worklist, checked := {} }
+
+def deepUses (candidate : ExportedEnv) (roots : Array Name) : Std.HashMap Name (Array Name) := Id.run do
+  let mut uses : Std.HashMap Name (Array Name) := {}
+  let mut worklist := roots
+  while !worklist.isEmpty do
+    let n := worklist.back!
+    worklist := worklist.pop
+    if uses.contains n then continue
+    if let some info := candidate.constMap[n]? then
+      let ns := usedConsts info (deep := true)
+      uses := uses.insert n ns
+      worklist := worklist ++ ns.filter (!uses.contains ·)
+  return uses
 
 /-! ### Leg 1b′ — kernel built-ins -/
 
@@ -325,9 +351,7 @@ def checkBuiltins (candidate : ExportedEnv) (trusted : Name → Option ConstantI
       | throw s!"kernel built-in closure reaches '{n}', which the trusted init.export does not hold"
     if kindTag info != kindTag genuine || !trustedMatches info genuine then
       throw s!"kernel built-in redefined: '{n}' (candidate's declaration differs from the trusted init.export copy)"
-    let ((), next) := (runForUsedConsts info (deep := false) fun m =>
-      modify (·.push m) : StateM (Array Name) Unit).run #[]
-    worklist := worklist ++ next.filter (!checked.contains ·)
+    worklist := worklist ++ (usedConsts info (deep := false)).filter (!checked.contains ·)
 
 /-! ### Leg 1c — kernel replay -/
 
@@ -375,7 +399,8 @@ def checkProof (reference candidate : ExportedEnv)
     (targets permitted primitive : Array Name)
     (kernels : Array KernelSpec := #[leanGatingKernel])
     (permittedTypes : Std.HashMap Name ConstantInfo := {})
-    (trusted : Name → Option ConstantInfo := fun _ => none) : IO ProofReport := do
+    (trusted : Name → Option ConstantInfo := fun _ => none)
+    (uses : Std.HashMap Name (Array Name) := {}) : IO ProofReport := do
   let statement : LegResult :=
     match checkStatement reference candidate targets primitive with
     | .ok _ => .pass
@@ -383,7 +408,7 @@ def checkProof (reference candidate : ExportedEnv)
   -- The built-ins need the trusted base; without one (`fun _ => none`) they go unchecked, as the
   -- trusted-redefinition check does.
   let «axioms» : LegResult :=
-    match checkAxioms candidate targets permitted permittedTypes trusted,
+    match checkAxioms candidate targets permitted permittedTypes trusted uses,
         (if (trusted ``Nat).isSome then checkBuiltins candidate trusted else .ok ()) with
     | .ok _, .ok _ => .pass
     | .error e, _ | _, .error e => .fail e
