@@ -180,6 +180,9 @@ jobs:
       - name: A record of deposits alone has no owner
         run: python3 ci/test_owner.py
 
+      - name: A heavy record is named and skipped, and its evidence can arrive in parts
+        run: python3 ci/test_heavy.py
+
       # ── the record ───────────────────────────────────────────────────────────────────────
       - name: Re-derive every record
         env:

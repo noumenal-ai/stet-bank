@@ -4,8 +4,9 @@
     mathesis list                    every record
     mathesis show MTH.R-2026-6001    one record, and the claim it discharges
     mathesis search shatter          over declaration names, statements and docstrings
-    mathesis verify                  re-derive every record from its frozen export
-    mathesis verify MTH.R-2026-6001  one record
+    mathesis verify                  re-derive every record from its frozen export, except heavy ones
+    mathesis verify --heavy          heavy records too
+    mathesis verify MTH.R-2026-6001  one record, heavy or not
 
 The repository holds the record and this program. Nothing here renders a website, deploys
 anything, or accepts a deposit — the point is that you can read this file, decide whether it
@@ -20,11 +21,18 @@ failure overall. Nothing is skipped silently: a leg that cannot run is an error,
   3. dependencies  a declaration name published by the record means ONE statement: an argument's
                    root carries its own claim's statement digest, and any node naming another
                    claim's declaration carries that claim's digest too
-  4. coverage      the number of records re-derived equals the number present
-  5. re-derivation for each argument: fetch <export_sha256>.export.gz, check the decompressed
+  4. coverage      the number of records re-derived, plus the heavy records named as skipped,
+                   equals the number present
+  5. re-derivation for each argument: fetch <export_sha256>.export.gz (or its export_parts, each
+                   checked against its own sha256 and joined in order), check the decompressed
                    bytes hash to that sha256, replay the export through the Lean kernel via
                    `mathesis-adjudicate`, and require ADMITTED, an accepted replay, no
                    triviality flag, and EXACTLY the axioms the manifest claims
+
+HEAVY RECORDS are named and skipped by default, never silently. An argument carrying `heavy`
+states what re-deriving it costs (peak memory, hours); a full run lists it as not re-derived and
+says how to re-derive it. Its evidence may arrive as `export_parts`, because a release asset is
+capped at 2 GiB.
 
 Leg 5 is the one that matters and the one to read the source of: `backend-gate/`. Legs 1–4 catch
 a manifest that lies about its own shape or about what else exists; leg 5 catches a manifest that
@@ -291,6 +299,7 @@ def cmd_search(argv: list[str]) -> int:
 # ---------------------------------------------------------------------------------------------
 
 FAILURES: list[str] = []
+HEAVY_SKIPPED: list[str] = []
 
 
 def fail(what: str, detail: str) -> None:
@@ -459,14 +468,17 @@ def leg_dependencies() -> None:
 
 
 def leg_coverage(rederived: int, present: int) -> None:
-    """The count re-derived equals the count present.
+    """The count re-derived, plus the heavy records named as skipped, equals the count present.
 
     Without this a run that quietly verified none of them reports no failures and exits 0, which
     is indistinguishable from a clean pass — the same shape as an absent binary reading as
     success.
     """
-    if rederived != present:
+    skipped = len(HEAVY_SKIPPED)
+    if rederived + skipped != present:
         fail("coverage", f"{rederived} of {present} arguments were re-derived")
+    elif skipped:
+        print(f"  ok    coverage      {rederived}/{present} re-derived, {skipped} heavy not re-derived (--heavy)")
     else:
         print(f"  ok    coverage      {rederived}/{present} re-derived")
 
@@ -519,6 +531,30 @@ def fetch(name: str, cache: Path) -> str | None:
     # 645 MB pull over 33 assets can fail.
     why = (proc.stderr or proc.stdout or "").strip().splitlines()
     return why[-1][:120] if why else f"{cmd[0]} exited {proc.returncode} and wrote no reason"
+
+
+def fetch_evidence(argument: dict, cache: Path) -> str | None:
+    sha = argument["export_sha256"]
+    parts = argument.get("export_parts")
+    if not parts:
+        return fetch(f"{sha}.export.gz", cache)
+    blob = cache / f"{sha}.export.gz"
+    for part in parts:
+        name = f"{part['sha256']}.part"
+        why = fetch(name, cache)
+        if why is not None:
+            return f"part {name}: {why}"
+        got = sha256_file(cache / name)
+        if got != part["sha256"]:
+            (cache / name).unlink(missing_ok=True)
+            return f"part {name} hashes to {got[:16]}…"
+    joining = cache / f"{sha}.export.gz.joining"
+    with joining.open("wb") as dst:
+        for part in parts:
+            with (cache / f"{part['sha256']}.part").open("rb") as src:
+                shutil.copyfileobj(src, dst, 8 << 20)
+    joining.replace(blob)
+    return None
 
 
 DEFAULT_GATE = ROOT / "backend-gate"
@@ -677,7 +713,7 @@ def leg_standing() -> None:
                 print(f"    {arg['accession']} has a step from {hit['accession']}, which is withdrawn")
 
 
-def leg_rederive(only: str | None) -> int:
+def leg_rederive(only: str | None, heavy: bool = False) -> int:
     """Replay each frozen export through the Lean kernel and compare it to its manifest."""
     ready: dict = {}
     default = ready_gate(DEFAULT_GATE, ready)
@@ -698,13 +734,19 @@ def leg_rederive(only: str | None) -> int:
         if toolchain is None:
             fail(acc, f"its dictionary entry {a['dictionary_id']} is not in dictionary.json")
             continue
+        if a.get("heavy") and not (heavy or only):
+            cost = a["heavy"]
+            HEAVY_SKIPPED.append(acc)
+            print(f"  skip  {acc}  {decl}  heavy: {cost['peak_memory_gb']} GB, {cost['hours']} h to re-derive "
+                  f"(bin/mathesis verify {acc})")
+            continue
         gate = ready_gate(gate_for(toolchain), ready)
         if isinstance(gate, str):
             fail(acc, f"{toolchain}: {gate}")
             continue
         exe, env = gate
         name = f"{sha}.export.gz"
-        why = fetch(name, cache)
+        why = fetch_evidence(a, cache)
         if why is not None:
             fail(acc, f"{name} did not arrive: {why}")
             continue
@@ -752,6 +794,7 @@ def leg_rederive(only: str | None) -> int:
 
 
 def cmd_verify(argv: list[str]) -> int:
+    heavy = "--heavy" in argv
     only = next((a for a in argv if not a.startswith("-")), None)
     if only and find(only) is None:
         print(f"no record {only}", file=sys.stderr)
@@ -761,7 +804,7 @@ def cmd_verify(argv: list[str]) -> int:
     leg_schema()
     leg_crosslinks()
     leg_dependencies()
-    done = leg_rederive(only)
+    done = leg_rederive(only, heavy)
     leg_coverage(done, present)
     leg_standing()
     print()
@@ -770,6 +813,10 @@ def cmd_verify(argv: list[str]) -> int:
         for f in FAILURES:
             print(f"  - {f}")
         return 1
+    if HEAVY_SKIPPED:
+        print(f"every record re-derived matches its own evidence; {len(HEAVY_SKIPPED)} heavy record(s) "
+              f"were not re-derived: {', '.join(HEAVY_SKIPPED)}.")
+        return 0
     print("every record re-derives from its own evidence.")
     return 0
 
