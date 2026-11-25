@@ -533,21 +533,18 @@ def main (args : List String) : IO UInt32 := do
     let builtinsResult : Except String Unit :=
       if trustedActive then checkBuiltins candidate trusted else .ok ()
     -- Statement-identity leg (the UK-i definition-smuggling defense): runs ONLY when a reference is
-    -- supplied. When present it re-uses the proven-sound `checkProof` primitive over R-vs-candidate.
+    -- supplied. When present it runs `checkStatement` over R-vs-candidate.
     -- `primitive := #[]`: the kernel built-ins are checked above, against the trusted copy rather
-    -- than against the reference, whose frozen export need not carry them. Its `statement` leg
-    -- gates admission here.
+    -- than against the reference, whose frozen export need not carry them. It gates admission here.
     let (statementResult, statementJson) ←
       match reference? with
       | none =>
         pure (LegResult.pass, Json.str "not-applicable")
       | some refPath => do
         let reference ← loadFrozenFile refPath
-        let report ← checkProof reference candidate targets permittedAxioms #[]
-                        (permittedTypes := permittedTypes) (trusted := trusted) (uses := uses)
-        match report.statement with
-        | .pass       => pure (LegResult.pass, Json.str "pass")
-        | .fail reason => pure (LegResult.fail reason, Json.str reason)
+        match checkStatement reference candidate targets #[] with
+        | .ok _       => pure (LegResult.pass, Json.str "pass")
+        | .error reason => pure (LegResult.fail reason, Json.str reason)
     let statementOk := statementResult.ok
     let builtinsOk := builtinsResult matches .ok _
     let verdictOk := accepted && allPass && statementOk && builtinsOk
