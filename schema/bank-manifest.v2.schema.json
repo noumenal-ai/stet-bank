@@ -365,7 +365,7 @@
         },
         "graph_abbreviated": {
           "const": true,
-          "description": "The graph holds the root and the definitions it rests on, not every step: nodes is the root alone and edges is empty. For a proof too large to publish step by step."
+          "description": "The graph is the root alone: nodes holds only the root and edges is empty, so it says nothing about the proof's steps. For a proof too large to publish step by step."
         },
         "replay_detail": {
           "type": "string"
