@@ -1,0 +1,78 @@
+{
+  "argument": {
+    "accession": "MTH.R-2026-6500",
+    "axiom_free": false,
+    "axioms_reached": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "citation_name": "Noumenal",
+    "cites": [],
+    "claim_accession": "MTH.C-2026-6500",
+    "created_at": "2026-11-26T11:56:45Z",
+    "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+    "edge_count": 0,
+    "export_bytes": 61570595788,
+    "export_constants": 1484733,
+    "export_parts": [
+      {
+        "bytes": 2000000000,
+        "sha256": "4b793938cd63da31c2fc79239aa031a2045dc5db4b4adc550bf078b6d8e4acba"
+      },
+      {
+        "bytes": 2000000000,
+        "sha256": "1ec69fdbc0630067cada1cc3c7d869e217d01aa7048e300d21a63e3f0af9227a"
+      },
+      {
+        "bytes": 2000000000,
+        "sha256": "c777d583c3fbabe831e2c3e33f211a3ac377add11f9c13590709b3e23bfe5f39"
+      },
+      {
+        "bytes": 2000000000,
+        "sha256": "56a9cb9989af7f19e31ae2fe1140c35a277f24c573179f9d02ea5de17f90a1f4"
+      },
+      {
+        "bytes": 1356532705,
+        "sha256": "9502956a44364669b83ea61e64dab16480e24a86c68272199991ecce9f841c50"
+      }
+    ],
+    "export_sha256": "5ea74b912147c5c93cc2b6d70cc727cf908df2f62ac6a20480a3fa02f6be244e",
+    "graph_abbreviated": true,
+    "heavy": {
+      "hours": 12.9,
+      "peak_memory_gb": 109.0
+    },
+    "libraries_used": [],
+    "login": "noumenal-ai",
+    "node_count": 1,
+    "private_helpers": [],
+    "profile_id": "8f8440e2-f514-5528-9eed-40caa9adcd1d",
+    "protected_names": [
+      "RiemannHypothesis"
+    ],
+    "replay_detail": "lean kernel accepts",
+    "root_decl_name": "riemannHypothesis",
+    "root_module": "Main",
+    "root_pretty": "RiemannHypothesis",
+    "source_url": "https://stet.world/deposits/13",
+    "statement_identity": "not-applicable",
+    "submission_id": "75ab8249-fef4-5382-98d9-6e72c1d82950",
+    "substrate": "Lean 4 kernel v4.33.1"
+  },
+  "edges": [],
+  "leaves": [],
+  "nodes": [
+    {
+      "citable": true,
+      "decl_name": "riemannHypothesis",
+      "depth": 0,
+      "dictionary_leaves": [],
+      "is_root": true,
+      "kind": "theorem",
+      "pretty": "RiemannHypothesis",
+      "topo": 0,
+      "type_sha256": "7024d428ede1c873b201a0801e42593ab9afd4e632c16c492678886797602547"
+    }
+  ]
+}
