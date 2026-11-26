@@ -399,8 +399,7 @@ def checkProof (reference candidate : ExportedEnv)
     (targets permitted primitive : Array Name)
     (kernels : Array KernelSpec := #[leanGatingKernel])
     (permittedTypes : Std.HashMap Name ConstantInfo := {})
-    (trusted : Name → Option ConstantInfo := fun _ => none)
-    (uses : Std.HashMap Name (Array Name) := {}) : IO ProofReport := do
+    (trusted : Name → Option ConstantInfo := fun _ => none) : IO ProofReport := do
   let statement : LegResult :=
     match checkStatement reference candidate targets primitive with
     | .ok _ => .pass
@@ -408,7 +407,7 @@ def checkProof (reference candidate : ExportedEnv)
   -- The built-ins need the trusted base; without one (`fun _ => none`) they go unchecked, as the
   -- trusted-redefinition check does.
   let «axioms» : LegResult :=
-    match checkAxioms candidate targets permitted permittedTypes trusted uses,
+    match checkAxioms candidate targets permitted permittedTypes trusted,
         (if (trusted ``Nat).isSome then checkBuiltins candidate trusted else .ok ()) with
     | .ok _, .ok _ => .pass
     | .error e, _ | _, .error e => .fail e
