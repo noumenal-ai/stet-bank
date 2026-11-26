@@ -1,0 +1,251 @@
+{
+  "argument": {
+    "accession": "MTH.R-2026-6502",
+    "axiom_free": false,
+    "axioms_reached": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "citation_name": "Adhishraya Sharma",
+    "cites": [],
+    "claim_accession": "MTH.C-2026-6502",
+    "created_at": "2026-11-26T13:50:06Z",
+    "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+    "edge_count": 11,
+    "export_bytes": 22440303,
+    "export_constants": 5423,
+    "export_sha256": "bc0ee803cac568c8f2deb3efd84332b8caa46ce80497490a79e5bc77319b4a8a",
+    "libraries_used": [],
+    "login": "adhishrayas",
+    "node_count": 8,
+    "private_helpers": [],
+    "profile_id": "2e77dfdc-8378-5819-a257-ea806f7461de",
+    "replay_detail": "lean kernel accepts",
+    "root_decl_name": "erdos_szekeres",
+    "root_module": "Submission",
+    "root_pretty": "{α : Type u_1} →\n  [inst : @LinearOrder α] →\n    {r s n : Nat} →\n      (f : Fin n → α) →\n        @Function.Injective (Fin n) α f →\n          @LT.lt Nat instLTNat (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) r s) n →\n            Or\n              (@Exists (@Finset (Fin n)) fun t =>\n                And (@Eq Nat (@Finset.card (Fin n) t) (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) r 1))\n                  (@StrictMonoOn (Fin n) α (@PartialOrder.toPreorder (Fin n) (Fin.instPartialOrder n))\n                    (@PartialOrder.toPreorder α\n                      (@SemilatticeInf.toPartialOrder α\n                        (@Lattice.toSemilatticeInf α\n                          (@DistribLattice.toLattice α (@instDistribLatticeOfLinearOrder α inst)))))\n                    f (@SetLike.coe (@Finset (Fin n)) (Fin n) (@Finset.instSetLike (Fin n)) t)))\n              (@Exists (@Finset (Fin n)) fun t =>\n                And (@Eq Nat (@Finset.card (Fin n) t) (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) s 1))\n                  (@StrictAntiOn (Fin n) α (@PartialOrder.toPreorder (Fin n) (Fin.instPartialOrder n))\n                    (@PartialOrder.toPreorder α\n                      (@SemilatticeInf.toPartialOrder α\n                        (@Lattice.toSemilatticeInf α\n                          (@DistribLattice.toLattice α (@instDistribLatticeOfLinearOrder α inst)))))\n                    f (@SetLike.coe (@Finset (Fin n)) (Fin n) (@Finset.instSetLike (Fin n)) t)))",
+    "source_url": "https://stet.world/deposits/15",
+    "statement_identity": "not-applicable",
+    "submission_id": "8c7e4d68-5941-5255-80ed-baf95a6d7d04",
+    "substrate": "Lean 4 kernel v4.33.1"
+  },
+  "edges": [
+    {
+      "used_by": "ErdosSzekeres.exists_incLen",
+      "uses": "ErdosSzekeres.singleton_mem_incSeqs",
+      "via": "direct"
+    },
+    {
+      "used_by": "ErdosSzekeres.exists_strictMonoOn",
+      "uses": "ErdosSzekeres.exists_incLen",
+      "via": "direct"
+    },
+    {
+      "used_by": "ErdosSzekeres.exists_strictMonoOn",
+      "uses": "ErdosSzekeres.mem_incSeqs",
+      "via": "direct"
+    },
+    {
+      "used_by": "ErdosSzekeres.incLen_lt",
+      "uses": "ErdosSzekeres.exists_incLen",
+      "via": "direct"
+    },
+    {
+      "used_by": "ErdosSzekeres.incLen_lt",
+      "uses": "ErdosSzekeres.mem_incSeqs",
+      "via": "direct"
+    },
+    {
+      "used_by": "ErdosSzekeres.label_ne",
+      "uses": "ErdosSzekeres.incLen_lt",
+      "via": "direct"
+    },
+    {
+      "used_by": "ErdosSzekeres.one_le_incLen",
+      "uses": "ErdosSzekeres.singleton_mem_incSeqs",
+      "via": "direct"
+    },
+    {
+      "used_by": "ErdosSzekeres.singleton_mem_incSeqs",
+      "uses": "ErdosSzekeres.mem_incSeqs",
+      "via": "direct"
+    },
+    {
+      "used_by": "erdos_szekeres",
+      "uses": "ErdosSzekeres.exists_strictMonoOn",
+      "via": "direct"
+    },
+    {
+      "used_by": "erdos_szekeres",
+      "uses": "ErdosSzekeres.label_ne",
+      "via": "direct"
+    },
+    {
+      "used_by": "erdos_szekeres",
+      "uses": "ErdosSzekeres.one_le_incLen",
+      "via": "direct"
+    }
+  ],
+  "leaves": [
+    {
+      "decl_name": "ErdosSzekeres.incLen",
+      "kind": "def",
+      "pretty": "{α : Type u_1} → [LinearOrder α] → {n : Nat} → (Fin n → α) → Fin n → Nat",
+      "role": "definition"
+    },
+    {
+      "decl_name": "ErdosSzekeres.incSeqs",
+      "kind": "def",
+      "pretty": "{α : Type u_1} → [LinearOrder α] → {n : Nat} → (Fin n → α) → Fin n → Finset (Finset (Fin n))",
+      "role": "definition"
+    }
+  ],
+  "nodes": [
+    {
+      "citable": true,
+      "decl_name": "erdos_szekeres",
+      "depth": 0,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incLen"
+      ],
+      "doc": "**Erdős–Szekeres theorem.** If `n > r * s`, every injective sequence `f : Fin n → α` into a\nlinear order has a strictly increasing subsequence of length `r + 1` or a strictly decreasing\nsubsequence of length `s + 1`.",
+      "hypotheses": [
+        {
+          "name": "hf",
+          "pretty": "Function.Injective f"
+        },
+        {
+          "name": "hn",
+          "pretty": "LT.lt (HMul.hMul r s) n"
+        }
+      ],
+      "is_root": true,
+      "kind": "theorem",
+      "pretty": "{α : Type u_1} →\n  [inst : @LinearOrder α] →\n    {r s n : Nat} →\n      (f : Fin n → α) →\n        @Function.Injective (Fin n) α f →\n          @LT.lt Nat instLTNat (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) r s) n →\n            Or\n              (@Exists (@Finset (Fin n)) fun t =>\n                And (@Eq Nat (@Finset.card (Fin n) t) (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) r 1))\n                  (@StrictMonoOn (Fin n) α (@PartialOrder.toPreorder (Fin n) (Fin.instPartialOrder n))\n                    (@PartialOrder.toPreorder α\n                      (@SemilatticeInf.toPartialOrder α\n                        (@Lattice.toSemilatticeInf α\n                          (@DistribLattice.toLattice α (@instDistribLatticeOfLinearOrder α inst)))))\n                    f (@SetLike.coe (@Finset (Fin n)) (Fin n) (@Finset.instSetLike (Fin n)) t)))\n              (@Exists (@Finset (Fin n)) fun t =>\n                And (@Eq Nat (@Finset.card (Fin n) t) (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) s 1))\n                  (@StrictAntiOn (Fin n) α (@PartialOrder.toPreorder (Fin n) (Fin.instPartialOrder n))\n                    (@PartialOrder.toPreorder α\n                      (@SemilatticeInf.toPartialOrder α\n                        (@Lattice.toSemilatticeInf α\n                          (@DistribLattice.toLattice α (@instDistribLatticeOfLinearOrder α inst)))))\n                    f (@SetLike.coe (@Finset (Fin n)) (Fin n) (@Finset.instSetLike (Fin n)) t)))",
+      "topo": 0,
+      "type_sha256": "11829e44281e0dd85943aab11c861b267cbb31835ca918551503339ea737acde"
+    },
+    {
+      "citable": true,
+      "decl_name": "ErdosSzekeres.one_le_incLen",
+      "depth": 1,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incLen",
+        "ErdosSzekeres.incSeqs"
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {α : Type u_1} [inst : LinearOrder α] {n : Nat} (f : Fin n → α) (i : Fin n), LE.le 1 (ErdosSzekeres.incLen f i)",
+      "topo": 1,
+      "type_sha256": "f39e3bf98e7ba07e35523d509317721d4fd236fa7f1c03ce59d57912caa35f41"
+    },
+    {
+      "citable": true,
+      "decl_name": "ErdosSzekeres.label_ne",
+      "depth": 1,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incLen"
+      ],
+      "hypotheses": [
+        {
+          "name": "hf",
+          "pretty": "Function.Injective f"
+        },
+        {
+          "name": "hij",
+          "pretty": "LT.lt i j"
+        }
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {α : Type u_1} [inst : LinearOrder α] {n : Nat} {f : Fin n → α} {i j : Fin n},\n  Function.Injective f →\n    LT.lt i j →\n      Ne (Prod.mk (ErdosSzekeres.incLen f i) (ErdosSzekeres.incLen (Function.comp (⇑OrderDual.toDual) f) i))\n        (Prod.mk (ErdosSzekeres.incLen f j) (ErdosSzekeres.incLen (Function.comp (⇑OrderDual.toDual) f) j))",
+      "topo": 2,
+      "type_sha256": "bd8a2d0e037cc6ed0e33eabe4397b6bb3dd11e0d2f75cfafa7e08ac37e7ad8f8"
+    },
+    {
+      "citable": true,
+      "decl_name": "ErdosSzekeres.incLen_lt",
+      "depth": 2,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incLen",
+        "ErdosSzekeres.incSeqs"
+      ],
+      "hypotheses": [
+        {
+          "name": "hij",
+          "pretty": "LT.lt i j"
+        },
+        {
+          "name": "hf",
+          "pretty": "LT.lt (f i) (f j)"
+        }
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {α : Type u_1} [inst : LinearOrder α] {n : Nat} {f : Fin n → α} {i j : Fin n},\n  LT.lt i j → LT.lt (f i) (f j) → LT.lt (ErdosSzekeres.incLen f i) (ErdosSzekeres.incLen f j)",
+      "topo": 3,
+      "type_sha256": "586a32c62ec140ec4573ab9a17c5e8c5d2ab689204c92009aa960c439fc426eb"
+    },
+    {
+      "citable": true,
+      "decl_name": "ErdosSzekeres.exists_strictMonoOn",
+      "depth": 1,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incLen",
+        "ErdosSzekeres.incSeqs"
+      ],
+      "hypotheses": [
+        {
+          "name": "hk",
+          "pretty": "LE.le k (ErdosSzekeres.incLen f i)"
+        }
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {α : Type u_1} [inst : LinearOrder α] {n : Nat} {f : Fin n → α} {i : Fin n} {k : Nat},\n  LE.le k (ErdosSzekeres.incLen f i) → Exists fun t => And (Eq t.card k) (StrictMonoOn f ↑t)",
+      "topo": 4,
+      "type_sha256": "919aa6e49f0d37c74b4d24d91623eb14d252295269c5bd11100b06ef2925b37a"
+    },
+    {
+      "citable": true,
+      "decl_name": "ErdosSzekeres.exists_incLen",
+      "depth": 3,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incLen",
+        "ErdosSzekeres.incSeqs"
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {α : Type u_1} [inst : LinearOrder α] {n : Nat} (f : Fin n → α) (i : Fin n),\n  Exists fun t => And (Membership.mem (ErdosSzekeres.incSeqs f i) t) (Eq t.card (ErdosSzekeres.incLen f i))",
+      "topo": 5,
+      "type_sha256": "79fd19cd1ca14623b3a526342c710f35dc0ea66ce2fc3b386436350c3e6b7e46"
+    },
+    {
+      "citable": true,
+      "decl_name": "ErdosSzekeres.singleton_mem_incSeqs",
+      "depth": 4,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incSeqs"
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {α : Type u_1} [inst : LinearOrder α] {n : Nat} (f : Fin n → α) (i : Fin n),\n  Membership.mem (ErdosSzekeres.incSeqs f i) (Singleton.singleton i)",
+      "topo": 6,
+      "type_sha256": "d599569bad51f7973a205ba945c69faf60467e688940c392b838ffa6a6cc5158"
+    },
+    {
+      "citable": true,
+      "decl_name": "ErdosSzekeres.mem_incSeqs",
+      "depth": 5,
+      "dictionary_leaves": [
+        "ErdosSzekeres.incSeqs"
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {α : Type u_1} [inst : LinearOrder α] {n : Nat} {f : Fin n → α} {i : Fin n} {t : Finset (Fin n)},\n  Iff (Membership.mem (ErdosSzekeres.incSeqs f i) t) (And (IsGreatest (↑t) i) (StrictMonoOn f ↑t))",
+      "topo": 7,
+      "type_sha256": "f80cd10655578d1d609b9a40095613179b7bb1a8ea5aa6da7f47f88fbd4c0363"
+    }
+  ]
+}
