@@ -1,0 +1,19 @@
+{
+  "accession": "MTH.C-2026-6505",
+  "arguments_count": 1,
+  "citation_name": "Adhishraya Sharma",
+  "created_at": "2026-11-26T17:02:38Z",
+  "decl_name": "imo2024_p1",
+  "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+  "doc": "**IMO 2024, Problem 1.** A real number `α` has the property that, for every positive\ninteger `n`, the integer `⌊α⌋ + ⌊2α⌋ + ⋯ + ⌊nα⌋` is a multiple of `n`, if and only if `α` is\nan even integer.",
+  "login": "adhishrayas",
+  "module": "Submission",
+  "origin": "deposited",
+  "pretty": "(α : Real) →\n  Iff\n    ((n : Nat) →\n      @LT.lt Nat instLTNat 0 n →\n        @Dvd.dvd Int Int.instDvd (@Nat.cast Int instNatCastInt n)\n          (@Finset.sum Nat Int Int.instAddCommMonoid (@Finset.Icc Nat Nat.instPreorder Nat.instLocallyFiniteOrder 1 n)\n            fun i =>\n            @Int.floor Real Real.instRing Real.linearOrder Real.instFloorRing\n              (@HMul.hMul Real Real Real (@instHMul Real Real.instMul) (@Nat.cast Real Real.instNatCast i) α)))\n    (@Exists Int fun k =>\n      @Eq Real α (@HMul.hMul Real Real Real (@instHMul Real Real.instMul) 2 (@Int.cast Real Real.instIntCast k)))",
+  "profile_id": "2e77dfdc-8378-5819-a257-ea806f7461de",
+  "reference_sha256": "a95f593f02017d513c1d258aa86d40b2dca9ffe2e117edb84349fd6ee8e9561d",
+  "statement_digest": "5e7e47b1bacd1d8b7a999abe1503b4fa261ff4db2fced5ef8ae36eb4ac72c032",
+  "statement_source": "kernel",
+  "title": "IMO 2024, Problem :-",
+  "words": "IMO 2024, Problem :-"
+}
