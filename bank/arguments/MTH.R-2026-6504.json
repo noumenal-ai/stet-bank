@@ -1,0 +1,63 @@
+{
+  "argument": {
+    "accession": "MTH.R-2026-6504",
+    "axiom_free": false,
+    "axioms_reached": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "citation_name": "Adhishraya Sharma",
+    "cites": [],
+    "claim_accession": "MTH.C-2026-6504",
+    "created_at": "2026-11-26T14:07:16Z",
+    "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+    "edge_count": 0,
+    "export_bytes": 14091428,
+    "export_constants": 4626,
+    "export_sha256": "7ebda3addaf25cba78295273d53ad07194f9bf577259ec56719fcce2259918a6",
+    "libraries_used": [],
+    "login": "adhishrayas",
+    "node_count": 1,
+    "private_helpers": [],
+    "profile_id": "2e77dfdc-8378-5819-a257-ea806f7461de",
+    "replay_detail": "lean kernel accepts",
+    "root_decl_name": "chicken_mcnugget",
+    "root_module": "Submission",
+    "root_pretty": "(a b : Nat) →\n  @LT.lt Nat instLTNat 1 a →\n    @LT.lt Nat instLTNat 1 b →\n      Nat.Coprime a b →\n        And\n          (Not\n            (@Exists Nat fun x =>\n              @Exists Nat fun y =>\n                @Eq Nat\n                  (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat)\n                    (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a x)\n                    (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) b y))\n                  (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                    (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                      (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a b) a)\n                    b)))\n          ((n : Nat) →\n            @LT.lt Nat instLTNat\n                (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                  (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                    (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a b) a)\n                  b)\n                n →\n              @Exists Nat fun x =>\n                @Exists Nat fun y =>\n                  @Eq Nat\n                    (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat)\n                      (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a x)\n                      (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) b y))\n                    n)",
+    "source_url": "https://stet.world/deposits/17",
+    "statement_identity": "not-applicable",
+    "submission_id": "304869d1-a87c-520a-9523-c09d074c8042",
+    "substrate": "Lean 4 kernel v4.33.1"
+  },
+  "edges": [],
+  "leaves": [],
+  "nodes": [
+    {
+      "citable": true,
+      "decl_name": "chicken_mcnugget",
+      "depth": 0,
+      "dictionary_leaves": [],
+      "doc": "**The Chicken McNugget theorem** (Sylvester, 1884). If `a, b > 1` are coprime, then\n`a * b - a - b` is the largest number that cannot be written as `a * x + b * y` with `x, y`\nnatural numbers: it cannot, and every larger number can. With boxes of 6 and 9 and 20 this is\nthe puzzle's namesake; with two box sizes, say 4 and 9, the largest impossible order is 23.",
+      "hypotheses": [
+        {
+          "name": "ha",
+          "pretty": "LT.lt 1 a"
+        },
+        {
+          "name": "hb",
+          "pretty": "LT.lt 1 b"
+        },
+        {
+          "name": "hab",
+          "pretty": "a.Coprime b"
+        }
+      ],
+      "is_root": true,
+      "kind": "theorem",
+      "pretty": "(a b : Nat) →\n  @LT.lt Nat instLTNat 1 a →\n    @LT.lt Nat instLTNat 1 b →\n      Nat.Coprime a b →\n        And\n          (Not\n            (@Exists Nat fun x =>\n              @Exists Nat fun y =>\n                @Eq Nat\n                  (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat)\n                    (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a x)\n                    (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) b y))\n                  (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                    (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                      (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a b) a)\n                    b)))\n          ((n : Nat) →\n            @LT.lt Nat instLTNat\n                (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                  (@HSub.hSub Nat Nat Nat (@instHSub Nat instSubNat)\n                    (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a b) a)\n                  b)\n                n →\n              @Exists Nat fun x =>\n                @Exists Nat fun y =>\n                  @Eq Nat\n                    (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat)\n                      (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) a x)\n                      (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) b y))\n                    n)",
+      "topo": 0,
+      "type_sha256": "c7ff66dd2aff6fd705d1a061d604a5ce257a82cbce28d35e0a889b2facb165b5"
+    }
+  ]
+}
