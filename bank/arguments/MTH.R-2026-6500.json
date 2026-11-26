@@ -61,13 +61,23 @@
     "substrate": "Lean 4 kernel v4.33.1"
   },
   "edges": [],
-  "leaves": [],
+  "leaves": [
+    {
+      "decl_name": "RiemannHypothesis",
+      "doc": "A formal statement of the **Riemann hypothesis** – constructing a term of this type is worth a million dollars.",
+      "kind": "def",
+      "pretty": "Prop",
+      "role": "definition"
+    }
+  ],
   "nodes": [
     {
       "citable": true,
       "decl_name": "riemannHypothesis",
       "depth": 0,
-      "dictionary_leaves": [],
+      "dictionary_leaves": [
+        "RiemannHypothesis"
+      ],
       "is_root": true,
       "kind": "theorem",
       "pretty": "RiemannHypothesis",
