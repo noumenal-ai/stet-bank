@@ -101,6 +101,9 @@ PROFILES = ROOT / "bank" / "profiles.json"
 DICTIONARY = ROOT / "bank" / "dictionary.json"
 POSTS = ROOT / "bank" / "posts.json"
 PEOPLE = ROOT / "bank" / "people.json"
+PROFILE_DIR = ROOT / "bank" / "profiles"
+DICTIONARY_DIR = ROOT / "bank" / "dictionary"
+RELATION_DIR = ROOT / "bank" / "relations"
 
 
 def load(path: Path) -> dict:
@@ -131,6 +134,23 @@ def sidecar(path: Path) -> list[dict]:
     state — so this does not fail. A file that exists but is malformed still raises.
     """
     return load(path) if path.is_file() else []
+
+
+def filed(directory: Path) -> list[tuple[Path, object]]:
+    return [(p, load(p)) for p in sorted(directory.glob("*.json"))]
+
+
+def profiles() -> list[dict]:
+    return sidecar(PROFILES) + [doc for _, doc in filed(PROFILE_DIR)]
+
+
+def dictionaries() -> list[dict]:
+    doc = sidecar(DICTIONARY)
+    return (doc if isinstance(doc, list) else [doc]) + [e for _, e in filed(DICTIONARY_DIR)]
+
+
+def relations() -> list[dict]:
+    return sidecar(RELATIONS) + [r for _, rows in filed(RELATION_DIR) for r in rows]
 
 
 def derived_dependencies() -> dict[str, list[str]]:
@@ -205,11 +225,11 @@ def show_assertions(claim_accession: str) -> None:
     was checked by a kernel: somebody read both results and said how they stand. A reader should
     not have to work out which lines of this output are of that kind.
     """
-    rels = [r for r in sidecar(RELATIONS)
+    rels = [r for r in relations()
             if claim_accession in (r["from"], r["to"])]
     if not rels:
         return
-    by_id = {x["id"]: x for x in sidecar(PROFILES)}
+    by_id = {x["id"]: x for x in profiles()}
     print("  asserted     not checked by anything — read them as somebody's opinion")
     for r in sorted(rels, key=lambda r: (r["from"], r["kind"], r["to"])):
         verb = r["kind"].replace("_", " ")
@@ -327,6 +347,9 @@ def leg_schema() -> None:
     branches = {
         CLAIMS: {"$defs": schema["$defs"], "$ref": "#/$defs/claimFile"},
         ARGUMENTS: {"$defs": schema["$defs"], "$ref": "#/$defs/argumentFile"},
+        PROFILE_DIR: {"$defs": schema["$defs"], "$ref": "#/$defs/profile"},
+        DICTIONARY_DIR: {"$defs": schema["$defs"], "$ref": "#/$defs/dictionary"},
+        RELATION_DIR: {"$defs": schema["$defs"], "$ref": "#/$defs/relationsFile"},
     }
     # The sidecar files are validated the same way, by name rather than by directory. They were
     # left out of the first version of this leg and a `builds_on` relation — a kind the schema
@@ -411,9 +434,12 @@ def leg_crosslinks() -> None:
         if c.get("topic") and c["topic"] not in topic_ids:
             fail("crosslinks", f"{c['accession']} is filed under topic {c['topic']!r}, which bank/topics.json does not define")
 
-    profile_ids = {x["id"] for x in sidecar(PROFILES)}
+    profile_ids = {x["id"] for x in profiles()}
+    for rec in [*claim_by.values(), *args]:
+        if rec["profile_id"] not in profile_ids:
+            fail("crosslinks", f"{rec['accession']} names profile {rec['profile_id']}, which no profile file defines")
     seen: set[tuple[str, str, str]] = set()
-    rels = sidecar(RELATIONS)
+    rels = relations()
     for r in rels:
         for end in ("from", "to"):
             if r[end] not in claim_by:
@@ -421,7 +447,7 @@ def leg_crosslinks() -> None:
         if r["from"] == r["to"]:
             fail("crosslinks", f"relation {r['from']} {r['kind']} itself")
         if r["asserted_by"] not in profile_ids:
-            fail("crosslinks", f"relation {r['from']} {r['kind']} {r['to']} is asserted by {r['asserted_by']}, which bank/profiles.json does not define")
+            fail("crosslinks", f"relation {r['from']} {r['kind']} {r['to']} is asserted by {r['asserted_by']}, which no profile file defines")
         key = (r["from"], r["kind"], r["to"])
         if key in seen:
             fail("crosslinks", f"relation {r['from']} {r['kind']} {r['to']} is asserted twice")
@@ -429,6 +455,32 @@ def leg_crosslinks() -> None:
 
     if not FAILURES:
         print(f"  ok    crosslinks    {len(args)} arguments, {len(claim_by)} claims, {len(rels)} relations")
+
+
+def leg_filing() -> None:
+    before = len(FAILURES)
+    for directory in (PROFILE_DIR, DICTIONARY_DIR):
+        for path, doc in filed(directory):
+            if not isinstance(doc, dict) or doc.get("id") != path.stem:
+                fail("filing", f"{path.relative_to(ROOT)} is not named by the id it holds")
+    for path, rows in filed(RELATION_DIR):
+        if not isinstance(rows, list) or any(r.get("from") != path.stem for r in rows):
+            fail("filing", f"{path.relative_to(ROOT)} holds a relation that is not from {path.stem}")
+    people = profiles()
+    for what, ids in (("profile", [p["id"] for p in people]),
+                      ("environment", [d["id"] for d in dictionaries()])):
+        for i in sorted({i for i in ids if ids.count(i) > 1}):
+            fail("filing", f"{what} {i} is filed twice")
+    owners = sorted(p["login"] for p in people if p.get("is_owner"))
+    if len(owners) > 1:
+        fail("filing", f"{', '.join(owners)} each claim to own the bank")
+    posts = sidecar(POSTS)
+    for field in ("post_number", "argument_accession"):
+        values = [p[field] for p in posts]
+        for v in sorted({v for v in values if values.count(v) > 1}, key=str):
+            fail("filing", f"posts.json lists {field} {v} twice")
+    if len(FAILURES) == before:
+        print(f"  ok    filing        {len(people)} profiles, {len(dictionaries())} environments, {len(posts)} listed posts")
 
 
 def leg_dependencies() -> None:
@@ -572,9 +624,7 @@ def gate_for(toolchain: str) -> Path:
 
 
 def dictionary_toolchains() -> dict[str, str]:
-    doc = load(DICTIONARY)
-    entries = doc if isinstance(doc, list) else [doc]
-    return {e["id"]: e["toolchain"] for e in entries}
+    return {e["id"]: e["toolchain"] for e in dictionaries()}
 
 
 def gate_exe(gate: Path) -> Path:
@@ -803,6 +853,7 @@ def cmd_verify(argv: list[str]) -> int:
     print(f"verifying {present} argument(s) from {ROOT}\n")
     leg_schema()
     leg_crosslinks()
+    leg_filing()
     leg_dependencies()
     done = leg_rederive(only, heavy)
     leg_coverage(done, present)
