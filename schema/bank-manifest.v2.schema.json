@@ -525,7 +525,7 @@
     },
     "relationsFile": {
       "type": "array",
-      "description": "bank/relations.json. How a curator says two claims stand to each other. `builds_on` is not a kind here and must not become one \u2014 see the note at the top of this file.",
+      "description": "bank/relations.json. How a curator says two claims stand to each other. `builds_on` is not a kind here and must not become one \u2014 see the note at the top of this file. A deposit files the relation it asserts as bank/relations/<from>.json, which holds only relations from that claim.",
       "items": {
         "$ref": "#/$defs/relation"
       }
@@ -604,7 +604,7 @@
       }
     },
     "profilesFile": {
-      "description": "bank/profiles.json. One entry per depositing identity. Was one element for the whole bank, because one person curated it; a deposited record names its own author, so this grows. At most one entry carries is_owner, the bank's curator, and a second would make the flag mean nothing. There may be none: a deposited profile is never the owner, and a record holding only deposits has no curator to name.",
+      "description": "bank/profiles.json. One entry per depositing identity. Was one element for the whole bank, because one person curated it; a deposited record names its own author, so this grows. At most one entry carries is_owner, the bank's curator, and a second would make the flag mean nothing. There may be none: a deposited profile is never the owner, and a record holding only deposits has no curator to name. A deposit does not add to this file. It files its depositor's profile as bank/profiles/<id>.json, named by the profile's id, unless the bank already holds that profile in either place; two deposits by one new depositor write the same bytes there, so their pull requests do not conflict.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/profile"
@@ -709,7 +709,7 @@
       }
     },
     "postsFile": {
-      "description": "bank/posts.json. The reading order, newest first. post_number is a position in that sequence and not an identifier: it renumbers when the sequence changes, which is why nothing else references it.",
+      "description": "bank/posts.json. The reading order, newest first. post_number is a position in that sequence and not an identifier: it renumbers when the sequence changes, which is why nothing else references it. A record published by deposit is not listed here. Its post is read from its argument, published_at being the argument's created_at, and numbered after this file's highest in order of created_at and then accession.",
       "type": "array",
       "items": {
         "type": "object",
@@ -742,7 +742,7 @@
       }
     },
     "dictionaryFile": {
-      "description": "bank/dictionary.json. The environment a record was built in. ONE OBJECT OR A LIST OF THEM: the file holds a single object today, and the renderer learned to read either before the file changes, so the two repositories need not land in lockstep. A bank whose records come from more than one environment must use the list form \u2014 a record's dictionary_id has to resolve to the environment that actually built it, and a deposit is built somewhere the curated corpus was not.",
+      "description": "bank/dictionary.json. The environment a record was built in. ONE OBJECT OR A LIST OF THEM: the file holds a single object today, and the renderer learned to read either before the file changes, so the two repositories need not land in lockstep. A bank whose records come from more than one environment must use the list form \u2014 a record's dictionary_id has to resolve to the environment that actually built it, and a deposit is built somewhere the curated corpus was not. A deposit built in an environment the bank does not hold files it as bank/dictionary/<id>.json, named by its id.",
       "anyOf": [
         {
           "$ref": "#/$defs/dictionary"

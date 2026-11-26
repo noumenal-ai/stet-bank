@@ -183,6 +183,9 @@ jobs:
       - name: A heavy record is named and skipped, and its evidence can arrive in parts
         run: python3 ci/test_heavy.py
 
+      - name: A deposit adds only files it owns, and nothing is filed twice
+        run: python3 ci/test_own_files.py
+
       # ── the record ───────────────────────────────────────────────────────────────────────
       - name: Re-derive every record
         env:
