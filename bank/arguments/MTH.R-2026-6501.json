@@ -1,0 +1,49 @@
+{
+  "argument": {
+    "accession": "MTH.R-2026-6501",
+    "axiom_free": false,
+    "axioms_reached": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "citation_name": "Adhishraya Sharma",
+    "cites": [],
+    "claim_accession": "MTH.C-2026-6501",
+    "created_at": "2026-11-26T13:40:24Z",
+    "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+    "edge_count": 0,
+    "export_bytes": 19027235,
+    "export_constants": 5552,
+    "export_sha256": "e017d066f8b45387050d4c8a0f0cc2c0d2ef6053ca6679796f7e0383a0071d36",
+    "libraries_used": [],
+    "login": "adhishrayas",
+    "node_count": 1,
+    "private_helpers": [],
+    "profile_id": "2e77dfdc-8378-5819-a257-ea806f7461de",
+    "replay_detail": "lean kernel accepts",
+    "root_decl_name": "nicomachus",
+    "root_module": "Submission",
+    "root_pretty": "(n : Nat) →\n  @Eq Nat\n    (@Finset.sum Nat Nat Nat.instAddCommMonoid (Finset.range n) fun i =>\n      @HPow.hPow Nat Nat Nat (@instHPow Nat Nat (@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid))) i 3)\n    (@HPow.hPow Nat Nat Nat (@instHPow Nat Nat (@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid)))\n      (@Finset.sum Nat Nat Nat.instAddCommMonoid (Finset.range n) fun a => a) 2)",
+    "source_url": "https://stet.world/deposits/14",
+    "statement_identity": "not-applicable",
+    "submission_id": "ba7b3efc-7aef-5964-8be0-11975b236b09",
+    "substrate": "Lean 4 kernel v4.33.1"
+  },
+  "edges": [],
+  "leaves": [],
+  "nodes": [
+    {
+      "citable": true,
+      "decl_name": "nicomachus",
+      "depth": 0,
+      "dictionary_leaves": [],
+      "doc": "**Nicomachus's theorem.** The sum of the first `n` cubes is the square of the sum of the\nfirst `n` natural numbers: `0³ + 1³ + ⋯ + (n-1)³ = (0 + 1 + ⋯ + (n-1))²`.",
+      "is_root": true,
+      "kind": "theorem",
+      "pretty": "(n : Nat) →\n  @Eq Nat\n    (@Finset.sum Nat Nat Nat.instAddCommMonoid (Finset.range n) fun i =>\n      @HPow.hPow Nat Nat Nat (@instHPow Nat Nat (@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid))) i 3)\n    (@HPow.hPow Nat Nat Nat (@instHPow Nat Nat (@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid)))\n      (@Finset.sum Nat Nat Nat.instAddCommMonoid (Finset.range n) fun a => a) 2)",
+      "topo": 0,
+      "type_sha256": "2c8a1af1267ba991f1dc81a57f419e626e83b3aff342a303c8263b4231d63a8c"
+    }
+  ]
+}
