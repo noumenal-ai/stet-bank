@@ -1,0 +1,18 @@
+{
+  "accession": "MTH.C-2026-6500",
+  "arguments_count": 1,
+  "citation_name": "Noumenal",
+  "created_at": "2026-11-26T11:56:45Z",
+  "decl_name": "riemannHypothesis",
+  "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+  "login": "noumenal-ai",
+  "module": "Main",
+  "origin": "deposited",
+  "pretty": "RiemannHypothesis",
+  "profile_id": "8f8440e2-f514-5528-9eed-40caa9adcd1d",
+  "reference_sha256": "5ea74b912147c5c93cc2b6d70cc727cf908df2f62ac6a20480a3fa02f6be244e",
+  "statement_digest": "7024d428ede1c873b201a0801e42593ab9afd4e632c16c492678886797602547",
+  "statement_source": "kernel",
+  "title": "The Riemann Hypothesis",
+  "words": "A proof produced by Claude, an AI agent."
+}
