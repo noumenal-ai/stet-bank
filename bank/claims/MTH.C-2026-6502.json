@@ -1,0 +1,19 @@
+{
+  "accession": "MTH.C-2026-6502",
+  "arguments_count": 1,
+  "citation_name": "Adhishraya Sharma",
+  "created_at": "2026-11-26T13:50:06Z",
+  "decl_name": "erdos_szekeres",
+  "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+  "doc": "**Erdős–Szekeres theorem.** If `n > r * s`, every injective sequence `f : Fin n → α` into a\nlinear order has a strictly increasing subsequence of length `r + 1` or a strictly decreasing\nsubsequence of length `s + 1`.",
+  "login": "adhishrayas",
+  "module": "Submission",
+  "origin": "deposited",
+  "pretty": "{α : Type u_1} →\n  [inst : @LinearOrder α] →\n    {r s n : Nat} →\n      (f : Fin n → α) →\n        @Function.Injective (Fin n) α f →\n          @LT.lt Nat instLTNat (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat) r s) n →\n            Or\n              (@Exists (@Finset (Fin n)) fun t =>\n                And (@Eq Nat (@Finset.card (Fin n) t) (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) r 1))\n                  (@StrictMonoOn (Fin n) α (@PartialOrder.toPreorder (Fin n) (Fin.instPartialOrder n))\n                    (@PartialOrder.toPreorder α\n                      (@SemilatticeInf.toPartialOrder α\n                        (@Lattice.toSemilatticeInf α\n                          (@DistribLattice.toLattice α (@instDistribLatticeOfLinearOrder α inst)))))\n                    f (@SetLike.coe (@Finset (Fin n)) (Fin n) (@Finset.instSetLike (Fin n)) t)))\n              (@Exists (@Finset (Fin n)) fun t =>\n                And (@Eq Nat (@Finset.card (Fin n) t) (@HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) s 1))\n                  (@StrictAntiOn (Fin n) α (@PartialOrder.toPreorder (Fin n) (Fin.instPartialOrder n))\n                    (@PartialOrder.toPreorder α\n                      (@SemilatticeInf.toPartialOrder α\n                        (@Lattice.toSemilatticeInf α\n                          (@DistribLattice.toLattice α (@instDistribLatticeOfLinearOrder α inst)))))\n                    f (@SetLike.coe (@Finset (Fin n)) (Fin n) (@Finset.instSetLike (Fin n)) t)))",
+  "profile_id": "2e77dfdc-8378-5819-a257-ea806f7461de",
+  "reference_sha256": "bc0ee803cac568c8f2deb3efd84332b8caa46ce80497490a79e5bc77319b4a8a",
+  "statement_digest": "11829e44281e0dd85943aab11c861b267cbb31835ca918551503339ea737acde",
+  "statement_source": "kernel",
+  "title": "Erdős–Szekeres: any sequence of n² + 1 distinct numbers has an incre…",
+  "words": "Erdős–Szekeres: any sequence of n² + 1 distinct numbers has an increasing or decreasing run of length n + 1"
+}
