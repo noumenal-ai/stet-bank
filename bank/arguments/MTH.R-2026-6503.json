@@ -1,0 +1,160 @@
+{
+  "argument": {
+    "accession": "MTH.R-2026-6503",
+    "axiom_free": false,
+    "axioms_reached": [
+      "Quot.sound",
+      "propext"
+    ],
+    "citation_name": "Adhishraya Sharma",
+    "cites": [],
+    "claim_accession": "MTH.C-2026-6503",
+    "created_at": "2026-11-26T13:54:37Z",
+    "dictionary_id": "f0ad5ef7-f585-5124-bec5-8531bd285168",
+    "edge_count": 3,
+    "export_bytes": 1236740,
+    "export_constants": 652,
+    "export_sha256": "fcafeb1ebc662ca5fc85fdd48ae7d159e76ea1d1ce136a25cf9f1d41968494e5",
+    "libraries_used": [],
+    "login": "adhishrayas",
+    "node_count": 4,
+    "private_helpers": [],
+    "profile_id": "2e77dfdc-8378-5819-a257-ea806f7461de",
+    "replay_detail": "lean kernel accepts",
+    "root_decl_name": "ramsey_three_three",
+    "root_module": "Submission",
+    "root_pretty": "And ((c : @Sym2 (Fin 6) → Bool) → MonoTriangle 6 c) (@Exists (@Sym2 (Fin 5) → Bool) fun c => Not (MonoTriangle 5 c))",
+    "source_url": "https://stet.world/deposits/16",
+    "statement_identity": "not-applicable",
+    "submission_id": "0cec565a-958d-5f09-a607-aabc2719e374",
+    "substrate": "Lean 4 kernel v4.33.1"
+  },
+  "edges": [
+    {
+      "used_by": "k6_has_mono_triangle",
+      "uses": "mono_of_hub",
+      "via": "direct"
+    },
+    {
+      "used_by": "ramsey_three_three",
+      "uses": "k6_has_mono_triangle",
+      "via": "direct"
+    },
+    {
+      "used_by": "ramsey_three_three",
+      "uses": "pentagon_no_mono_triangle",
+      "via": "direct"
+    }
+  ],
+  "leaves": [
+    {
+      "decl_name": "MonoTriangle",
+      "doc": "Three distinct vertices whose three edges all have the same colour.",
+      "kind": "def",
+      "pretty": "{n : Nat} → (Sym2 (Fin n) → Bool) → Prop",
+      "role": "definition"
+    },
+    {
+      "decl_name": "pentagon",
+      "doc": "The pentagon colouring of the complete graph on five vertices: an edge is coloured `true`\nwhen its endpoints are neighbours around the pentagon.",
+      "kind": "def",
+      "pretty": "Sym2 (Fin 5) → Bool",
+      "role": "definition"
+    }
+  ],
+  "nodes": [
+    {
+      "citable": true,
+      "decl_name": "ramsey_three_three",
+      "depth": 0,
+      "dictionary_leaves": [
+        "MonoTriangle",
+        "pentagon"
+      ],
+      "doc": "**R(3,3) = 6.** Colour every edge of the complete graph on six vertices with one of two\ncolours: some triangle always has all three edges the same colour. Five vertices are not enough:\nthe pentagon colouring of the complete graph on five vertices has no such triangle.",
+      "is_root": true,
+      "kind": "theorem",
+      "pretty": "And ((c : @Sym2 (Fin 6) → Bool) → MonoTriangle 6 c) (@Exists (@Sym2 (Fin 5) → Bool) fun c => Not (MonoTriangle 5 c))",
+      "topo": 0,
+      "type_sha256": "dda07d337cfac77eaf07417723f99eb1b3c04880e75aa91140988474c3b2ba85"
+    },
+    {
+      "citable": true,
+      "decl_name": "pentagon_no_mono_triangle",
+      "depth": 1,
+      "dictionary_leaves": [
+        "MonoTriangle",
+        "pentagon"
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "Not (MonoTriangle pentagon)",
+      "topo": 1,
+      "type_sha256": "cc6d12143d59431988c88d89a9ded7462562000a0fc767fd4deab816451077d9"
+    },
+    {
+      "citable": true,
+      "decl_name": "k6_has_mono_triangle",
+      "depth": 1,
+      "dictionary_leaves": [
+        "MonoTriangle"
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ (c : Sym2 (Fin 6) → Bool), MonoTriangle c",
+      "topo": 2,
+      "type_sha256": "4922efe5cd4ca08508b208697c5dbb1139a43876f1b7d41a2e5e26dce6fbe6f2"
+    },
+    {
+      "citable": true,
+      "decl_name": "mono_of_hub",
+      "depth": 2,
+      "dictionary_leaves": [
+        "MonoTriangle"
+      ],
+      "hypotheses": [
+        {
+          "name": "hvx",
+          "pretty": "Ne v x"
+        },
+        {
+          "name": "hvy",
+          "pretty": "Ne v y"
+        },
+        {
+          "name": "hvz",
+          "pretty": "Ne v z"
+        },
+        {
+          "name": "hxy",
+          "pretty": "Ne x y"
+        },
+        {
+          "name": "hxz",
+          "pretty": "Ne x z"
+        },
+        {
+          "name": "hyz",
+          "pretty": "Ne y z"
+        },
+        {
+          "name": "hx",
+          "pretty": "Eq (c (Sym2.mk v x)) k"
+        },
+        {
+          "name": "hy",
+          "pretty": "Eq (c (Sym2.mk v y)) k"
+        },
+        {
+          "name": "hz",
+          "pretty": "Eq (c (Sym2.mk v z)) k"
+        }
+      ],
+      "is_root": false,
+      "kind": "theorem",
+      "pretty": "∀ {n : Nat} (c : Sym2 (Fin n) → Bool) {k : Bool} {v x y z : Fin n},\n  Ne v x →\n    Ne v y →\n      Ne v z →\n        Ne x y →\n          Ne x z → Ne y z → Eq (c (Sym2.mk v x)) k → Eq (c (Sym2.mk v y)) k → Eq (c (Sym2.mk v z)) k → MonoTriangle c",
+      "topo": 3,
+      "type_sha256": "d0e68d2bdaee8f36a1bb0d1841d4024cdf6ab87818d37c7dc062275d093112fb"
+    }
+  ]
+}
