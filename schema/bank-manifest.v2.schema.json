@@ -181,6 +181,32 @@
             "$ref": "#/$defs/leaf"
           }
         }
+      },
+      "if": {
+        "properties": {
+          "argument": {
+            "required": [
+              "graph_abbreviated"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "nodes": {
+            "maxItems": 1,
+            "items": {
+              "properties": {
+                "is_root": {
+                  "const": true
+                }
+              }
+            }
+          },
+          "edges": {
+            "maxItems": 0
+          }
+        }
       }
     },
     "argument": {
@@ -295,6 +321,51 @@
           },
           "uniqueItems": true,
           "description": "The protected names (the gate's protectedNames) the proof's full closure reaches, statement and proof, VERBATIM from the adjudicator's report. Absent means none. bin/mathesis verify requires exact set equality against a fresh replay, so a record cannot leave out the claim it makes."
+        },
+        "heavy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "peak_memory_gb",
+            "hours"
+          ],
+          "properties": {
+            "peak_memory_gb": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "hours": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "description": "What re-deriving this record cost when it was admitted. bin/mathesis verify names a heavy record and skips it unless asked (--heavy, or the record's accession), and its coverage leg counts it as skipped rather than re-derived."
+        },
+        "export_parts": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sha256",
+              "bytes"
+            ],
+            "properties": {
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "description": "The evidence in order, as <sha256>.part assets, when <export_sha256>.export.gz is too large for one release asset (2 GiB). Each part is checked against its own sha256 and the joined bytes are then decompressed and checked against export_sha256, exactly as a whole blob is."
+        },
+        "graph_abbreviated": {
+          "const": true,
+          "description": "The graph is the root alone: nodes holds only the root and edges is empty, so it says nothing about the proof's steps. For a proof too large to publish step by step."
         },
         "replay_detail": {
           "type": "string"

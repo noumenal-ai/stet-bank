@@ -33,16 +33,36 @@ fetch() {
   esac
 }
 
-pass=0; fail=0
+fetch_parts() {
+  local name="$1" p got
+  for p in ${2//,/ }; do
+    fetch "$p.part" || { echo "part $p.part is not in the store"; return 1; }
+    got="$(sha256 < "$cache/$p.part")"
+    [ "$got" = "$p" ] || { rm -f "$cache/$p.part"; echo "part $p.part hashes to $got"; return 1; }
+  done
+  : > "$cache/$name.joining"
+  for p in ${2//,/ }; do cat "$cache/$p.part" >> "$cache/$name.joining"; done
+  mv "$cache/$name.joining" "$cache/$name"
+}
+
+heavy=0; [ "${1:-}" = "--heavy" ] && heavy=1
+pass=0; fail=0; skip=0
 for manifest in "$here"/bank/arguments/*.json; do
-  read -r acc sha decl axioms < <(python3 - "$manifest" <<'PY'
+  read -r acc sha decl axioms cost parts < <(python3 - "$manifest" <<'PY'
 import json, sys
 a = json.load(open(sys.argv[1]))["argument"]
-print(a["accession"], a["export_sha256"], a["root_decl_name"], ",".join(sorted(a["axioms_reached"])))
+h = a.get("heavy")
+print(a["accession"], a["export_sha256"], a["root_decl_name"], ",".join(sorted(a["axioms_reached"])) or "-",
+      f"{h['peak_memory_gb']}GB/{h['hours']}h" if h else "-",
+      ",".join(p["sha256"] for p in a.get("export_parts") or []) or "-")
 PY
 )
+  [ "$axioms" = "-" ] && axioms=""
+  if [ "$cost" != "-" ] && [ "$heavy" -eq 0 ]; then echo "skip $acc $decl: heavy, $cost to re-derive (--heavy)"; skip=$((skip + 1)); continue; fi
   name="$sha.export.gz"
-  if ! fetch "$name"; then echo "FAIL $acc: $name is not in the store"; fail=$((fail + 1)); continue; fi
+  if [ "$parts" != "-" ]; then
+    if ! why="$(fetch_parts "$name" "$parts")"; then echo "FAIL $acc: $why"; fail=$((fail + 1)); continue; fi
+  elif ! fetch "$name"; then echo "FAIL $acc: $name is not in the store"; fail=$((fail + 1)); continue; fi
   got="$(gunzip -c "$cache/$name" | sha256)"
   if [ "$got" != "$sha" ]; then echo "FAIL $acc: blob hashes to $got, manifest says $sha"; fail=$((fail + 1)); continue; fi
   work="$(mktemp -d)"
@@ -63,5 +83,5 @@ PY
   else echo "FAIL $acc $decl"; fail=$((fail + 1)); fi
   rm -rf "$work"
 done
-echo "bank: $pass admitted, $fail failed"
-[ "$fail" -eq 0 ] && [ "$pass" -gt 0 ]
+echo "bank: $pass admitted, $fail failed, $skip heavy not re-derived"
+[ "$fail" -eq 0 ] && [ $((pass + skip)) -gt 0 ]

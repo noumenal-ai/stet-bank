@@ -63,12 +63,20 @@ cannot run is an error, not a pass.
 | **schema** | every file matches `schema/bank-manifest.v2.schema.json` — the claims and arguments, and the six sidecars that say who wrote a record, what built it, and where it sits in the reading order |
 | **crosslinks** | every argument names a claim that exists, every relation names two that do and a profile that does, and every topic a claim is filed under is one that exists |
 | **dependencies** | a declaration name the record publishes means **one** statement: an argument's root carries the statement digest of the claim it discharges, and any step naming another claim's declaration carries that claim's digest too |
-| **coverage** | the number re-derived equals the number present — "31 of 32 clean" must not print as "clean" |
-| **re-derivation** | fetch `<export_sha256>.export.gz`, check the decompressed bytes against that sha256, replay through `mathesis-adjudicate`, and require ADMITTED, an accepted replay, no triviality flag, **exactly** the axioms the manifest claims, and **exactly** the protected names it claims (below) |
+| **coverage** | the number re-derived, plus the heavy records named as skipped, equals the number present — "31 of 32 clean" must not print as "clean" |
+| **re-derivation** | fetch `<export_sha256>.export.gz` (or its `export_parts`, each checked against its own sha256 and joined in order), check the decompressed bytes against that sha256, replay through `mathesis-adjudicate`, and require ADMITTED, an accepted replay, no triviality flag, **exactly** the axioms the manifest claims, and **exactly** the protected names it claims (below) |
 
 The last is the one that matters, and `backend-gate/` is the source to read. The first four
 catch a manifest that lies about its own shape or about what else exists; the last catches one
 that lies about mathematics.
+
+**Heavy records.** A record carrying `heavy` states what re-deriving it costs: the Riemann
+Hypothesis export took 12.9 hours and 106 GB on one core. `verify` names such a record and skips
+it unless asked, and says so in the coverage line and at the end of the run;
+`bin/mathesis verify --heavy`, or `verify <accession>`, re-derives it like any other. Its
+evidence may be stored as `export_parts`, because a release asset is capped at 2 GiB, and its
+graph may be abbreviated to the root alone (`graph_abbreviated`) when the proof has too many
+steps to publish one by one.
 
 **Dependencies are derived, never stored.** Where an argument's graph contains another claim's
 root declaration under that claim's statement digest, the argument depends on it, and
