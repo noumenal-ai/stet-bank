@@ -98,11 +98,19 @@ is the whole point of reading this repository rather than taking its word.
 
 ## Layout
 
+A deposit's pull request only adds files: its claim and argument, named by their accessions,
+and — when the bank does not have them yet — its depositor's profile and its environment, named
+by their ids. It edits no file another deposit could edit, so open deposits never conflict with
+each other and merge in any order. Its post is not written anywhere: it is read from the argument
+and numbered after the last one `posts.json` lists. `verify` refuses a profile or environment
+filed twice, a file not named by the id it holds, and a post number listed twice.
+
 | Path | Contents |
 |---|---|
 | `bank/claims/`, `bank/arguments/` | the record: claims, and the arguments that discharge them |
 | `bank/dictionary.json`, `posts.json`, `profiles.json`, `people.json` | the rest of the record, and its authorship |
-| `bank/relations.json` | how a curator says two claims stand to each other — assertions, attributed and dated |
+| `bank/profiles/<id>.json`, `bank/dictionary/<id>.json` | a depositor's profile, and an environment, first filed by a deposit — one file each, named by its id |
+| `bank/relations.json`, `bank/relations/<claim>.json` | how a curator says two claims stand to each other — assertions, attributed and dated; a deposit's own in a file named by its claim |
 | `bank/topics.json` | editorial groupings; an unclassified record is not an error |
 | `bank/tools/verify-bank.sh` | the re-derivation leg on its own, if you would rather run it directly |
 | `backend-gate/` | the Lean adjudicator, and `init.export`, the trusted logical core every replay is checked against |
